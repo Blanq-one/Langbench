@@ -4,7 +4,7 @@
 
 providers:
   groq:
-    base_url: https://api.groq.com/openai/v1   # VERIFY
+    base_url: https://api.groq.com/openai/v1   # VERIFIED 2026-07-24 (live smoke call)
     api_key_env: GROQ_API_KEY
     enabled: auto
     role: candidate
@@ -28,7 +28,7 @@ providers:
     role: candidate
 
   gemini:
-    base_url: https://generativelanguage.googleapis.com/v1beta   # VERIFY
+    base_url: https://generativelanguage.googleapis.com/v1beta   # VERIFIED 2026-07-24 (live smoke call)
     api_key_env: GEMINI_API_KEY
     enabled: auto
     role: judge

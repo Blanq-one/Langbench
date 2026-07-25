@@ -44,7 +44,7 @@ async def list_openai_compat(base_url: str, api_key: str) -> list[str]:
 
 
 async def list_gemini(base_url: str, api_key: str) -> list[str]:
-    # VERIFY: GET {base}/models returns {"models": [{"name": "models/..."}]}
+    # VERIFIED 2026-07-24: GET {base}/models returns {"models": [{"name": "models/..."}]}
     # Key goes in the x-goog-api-key header, never the URL (leaks via exception reprs).
     async with httpx.AsyncClient(timeout=30.0) as client:
         resp = await client.get(f"{base_url}/models", headers={"x-goog-api-key": api_key})

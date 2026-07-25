@@ -1,7 +1,7 @@
 """Groq adapter. Groq exposes an OpenAI-compatible chat completions API.
 
-# VERIFY: confirm with one live smoke call that /chat/completions and the
-# usage block match the OpenAI shape (they did at time of writing).
+# VERIFIED 2026-07-24 (live smoke call): /chat/completions matches the OpenAI
+# shape; usage.prompt_tokens / usage.completion_tokens present as coded.
 """
 
 from __future__ import annotations

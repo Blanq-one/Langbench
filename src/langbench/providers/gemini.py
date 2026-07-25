@@ -1,9 +1,11 @@
 """Google AI Studio (Gemini) adapter — the judge. Distinct wire format.
 
-# VERIFY: endpoint path and response shape against current Gemini REST docs:
+# VERIFIED 2026-07-24 (live smoke call against gemini-3.5-flash-lite):
 #   POST {base}/models/{model}:generateContent  (auth: x-goog-api-key header)
 #   body: contents[].parts[].text, systemInstruction, generationConfig
-#   resp: candidates[0].content.parts[0].text, usageMetadata token counts
+#   resp: candidates[0].content.parts[0].text, usageMetadata.promptTokenCount /
+#   candidatesTokenCount — all exactly as coded. Response parts also carry a
+#   thoughtSignature field (ignored by the parser).
 """
 
 from __future__ import annotations
@@ -30,7 +32,7 @@ class GeminiAdapter(ProviderAdapter):
         url = f"{self.provider.base_url}/models/{model.model_id}:generateContent"
         # Auth via header, NOT ?key= query param: httpx exception reprs include
         # the full URL, so a key in the URL would leak into retry-path logs.
-        # Gemini's REST API accepts x-goog-api-key.  # VERIFY header name
+        # Gemini's REST API accepts x-goog-api-key.  # VERIFIED 2026-07-24
         return url, body, {"x-goog-api-key": self.api_key}
 
     def _parse(self, body: dict[str, Any]) -> tuple[str, int | None, int | None]:
