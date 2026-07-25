@@ -40,6 +40,27 @@ class TestGleu:
         with pytest.raises(ValueError):
             sentence_gleu(SRC, REF, [])
 
+    # Two reference-implementation behaviors, pinned after the 2026-07-25
+    # side-by-side against cnap/gec-ranking (DECISION 36).
+
+    def test_zero_stat_smoothing_matches_reference(self) -> None:
+        # A perfect 2-token correction has NO 3-/4-grams; the reference
+        # smooths those zero stats to 1 (=> log 1/1 = 0), so the score is a
+        # clean 1.0. The old 1e-9 log floor crushed this to ~3e-5.
+        assert sentence_gleu("a b", "a b", ["a b"]) == pytest.approx(1.0)
+
+    def test_penalty_is_set_difference_matches_reference(self) -> None:
+        # src has 'the' twice, ref once: count-aware subtraction would
+        # penalize the surplus 'the'; the reference's set difference never
+        # penalizes an n-gram type the reference contains.
+        # Hand-computed reference stats for cand == src:
+        #   n=1: 4/5, n=2: (0->1)/4, n=3: (0->1)/3, n=4: (0->1)/2, bp=1
+        expected = (4 / 5 * 1 / 4 * 1 / 3 * 1 / 2) ** 0.25
+        got = sentence_gleu(
+            "the cat saw the dog", "the cat saw the dog", ["the cat saw a dog"]
+        )
+        assert got == pytest.approx(expected)
+
 
 class TestEditRate:
     def test_identity_is_zero(self) -> None:

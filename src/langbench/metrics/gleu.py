@@ -11,8 +11,15 @@ Sentence-level GLEU against one reference:
 Multiple references: mean of per-reference GLEU. The Napoles 2016 update
 samples one reference per bootstrap iteration; with the small per-item
 reference counts here (1-2), the mean is equivalent in expectation.
-# DECISION: mean over references. # VERIFY: sanity-check a handful of scores
-# against the reference implementation (github cnap/gec-ranking) after setup.
+# DECISION: mean over references.
+# VERIFIED 2026-07-25 against the reference implementation
+# (github.com/cnap/gec-ranking, sentence-level smooth=True path): 10/10 real
+# W&I items match exactly after adopting the reference's two behaviors
+# (DECISION 36): (a) sentence-level smoothing replaces zero numerator/
+# denominator stats with 1 (not a log floor); (b) the source-ngram penalty
+# uses a SET difference (an n-gram type present in the reference is never
+# penalized, regardless of source count surplus). Empty candidates still
+# score 0.0 (guard; the pipeline maps parse failures to 0 before this).
 
 Tokenization: whitespace on already-tokenized data (W&I M2 is tokenized);
 simple punctuation-splitting fallback for raw text (MERLIN, COWS-L2H).
@@ -55,20 +62,19 @@ def _gleu_single(
     log_sum = 0.0
     for n in range(1, max_n + 1):
         cand_n = _ngrams(cand, n)
-        total = sum(cand_n.values())
-        if total == 0:
-            # Candidate shorter than n: standard smoothing — treat higher
-            # orders as precision epsilon rather than zeroing the product.
-            log_sum += math.log(1e-9)
-            continue
         ref_n = _ngrams(ref, n)
         src_n = _ngrams(src, n)
         matches = sum((cand_n & ref_n).values())
-        # n-grams the candidate shares with the source but the reference removed
-        src_only = src_n - ref_n
+        # Reference behavior (set difference): an n-gram TYPE that appears in
+        # the reference is never penalized, even if the source has surplus
+        # count. (Counter subtraction would penalize the surplus.)
+        src_only = Counter({k: v for k, v in src_n.items() if k not in ref_n})
         penalty = sum((cand_n & src_only).values())
-        p = max(matches - penalty, 0) / total
-        log_sum += math.log(p) if p > 0 else math.log(1e-9)
+        num = max(matches - penalty, 0)
+        den = sum(cand_n.values())
+        # Reference sentence-level smoothing (gleu(stats, smooth=True)):
+        # any zero stat — numerator or denominator — becomes 1.
+        log_sum += math.log((num or 1) / (den or 1))
     geo_mean = math.exp(log_sum / max_n)
     bp = 1.0 if len(cand) >= len(ref) else math.exp(1 - len(ref) / max(len(cand), 1))
     return bp * geo_mean

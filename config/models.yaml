@@ -49,7 +49,12 @@ models:
     enabled: auto
     rate_limit: { rpm: 30, rpd: 1000 }
     pricing: { input_per_mtok: 0.60, output_per_mtok: 3.00 }
-    max_output_tokens: 1024
+    # DECISION: reasoning models get 4096 — hidden reasoning consumes the
+    # budget before the answer (C6: 79/94 responses hit finish_reason=length
+    # with ALL 1024 tokens spent on reasoning, content empty). The resulting
+    # token cost stays in the honest cost column. max_tokens is per-model in
+    # the cache key, so other models' cached calls stay valid.
+    max_output_tokens: 4096
     # DECISION: reasoning_format hidden, not reasoning_effort none — "none"
     # would change the model's capability and answer a question nobody asked
     # (Qwen-without-reasoning isn't what a bot operator would deploy); leaving
@@ -69,7 +74,7 @@ models:
     enabled: auto
     rate_limit: { rpm: 30, rpd: 1000 }
     pricing: { input_per_mtok: 0.075, output_per_mtok: 0.30 }
-    max_output_tokens: 1024
+    max_output_tokens: 4096   # reasoning model: same DECISION as qwen3.6-27b above
 
   # ---- OpenRouter free-tier candidates (only used if OPENROUTER_API_KEY set) ----
   - key: openrouter/llama-3.1-8b-free

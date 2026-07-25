@@ -180,6 +180,21 @@ leakage around `matplotlib`/`nio` (overrides exist in pyproject), and the
     carry bands — the "dev is band-less" premise held only for the pooled
     ABCN.dev file. prepare_wi_locness now parses banded dev (pooled file
     kept as fallback); English CEFR pools banded train + dev, GEC unchanged.
+35. (Live integration, 2026-07-25) Reasoning models (qwen3.6-27b,
+    gpt-oss-20b) get max_output_tokens 4096: hidden reasoning consumes the
+    budget before the answer (C6: 79/94 qwen responses hit
+    finish_reason=length with all 1024 tokens spent reasoning, content
+    empty). The resulting token cost stays in the honest cost column.
+    max_tokens is per-model in the cache key, so other models' cached calls
+    stay valid.
+36. (Live integration, 2026-07-25) gleu.py adopts the reference
+    implementation's exact behaviors (cnap/gec-ranking, sentence-level
+    smooth=True): zero stats smooth to 1 (not a 1e-9 log floor) and the
+    source-ngram penalty is a SET difference (reference-present n-gram types
+    are never penalized). Verified 10/10 exact on real W&I items; the old
+    smoothing diverged by up to 0.19 on zero-match sentences — ranking-
+    changing. "GLEU (Napoles et al.)" in the report means the reference
+    implementation, full stop.
 
 ## C. Live-integration checklist, in order
 
@@ -193,9 +208,14 @@ leakage around `matplotlib`/`nio` (overrides exist in pyproject), and the
 5. Download corpora per `prepare_data.py` instructions; run it per dataset;
    fix parsers against real formats (A3 — budget the most time here);
    `--manifests` last.
-6. Tiny live eval: `run_eval.py --langs en --models groq/llama-3.1-8b-instant
-   <one-more>` with n_auto temporarily set to 5 in eval.yaml. Inspect the
-   results DB rows by hand.
+6. Tiny live eval: `run_eval.py --langs en --models <one> <one-more>`.
+   NOTE (corrected 2026-07-25 after it caused an over-scale run): run scale
+   comes from the COMMITTED MANIFESTS (data/manifests/), not eval.yaml —
+   n_auto only affects `prepare_data.py --manifests`. There is no small-run
+   knob; restrict scope with --langs/--models and know it runs the full
+   manifest for that slice. Also: on Windows, killing run_eval.py requires
+   killing the PROCESS TREE (uv spawns a python child that survives the
+   parent; an orphan will silently keep spending quota).
 7. Restore sample sizes; `run_eval.py --dry-run`; sanity-check the quota
    estimate against the real limits you filled in.
 8. Full candidates phase daily with defaults until pending hits zero.
