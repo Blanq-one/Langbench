@@ -116,7 +116,7 @@ models:
   # tier, 2026-07-24. Gemini TPM is 250K — a non-issue at our payload sizes.
   - key: gemini/gemini-3.5-flash-lite
     provider: gemini
-    model_id: gemini-3.5-flash-lite         # VERIFY via discover_models.py once GEMINI_API_KEY is set
+    model_id: gemini-3.5-flash-lite         # VERIFIED 2026-07-24 via discover_models.py
     display_name: Gemini 3.5 Flash-Lite (judge)
     enabled: auto
     rate_limit: { rpm: 15, rpd: 500 }
@@ -131,7 +131,7 @@ models:
   # the Flash-Lite quota collapses mid-run.
   # - key: gemini/gemma-4-26b
   #   provider: gemini
-  #   model_id: gemma-4-26b                 # VERIFY exact id via discover_models.py
+  #   model_id: gemma-4-26b-a4b-it          # VERIFIED 2026-07-24 via discover_models.py
   #   display_name: Gemma 4 26B (quota-emergency judge fallback)
   #   enabled: false
   #   rate_limit: { rpm: 30, rpd: 14400 }
