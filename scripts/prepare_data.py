@@ -42,12 +42,14 @@ CORPORA = Path("data/corpora")
 INSTRUCTIONS = {
     "wi-locness": """\
 W&I+LOCNESS (BEA-2019 shared task data, Write & Improve + LOCNESS)
-  1. Go to the BEA-2019 shared task data page and download the W&I+LOCNESS
-     v2.1 package.                                   # VERIFY current URL
-  2. Extract so that the M2 files land at:
+  1. Download wi+locness_v2.1.bea19.tar.gz from the BEA-2019 shared task
+     data page (https://www.cl.cam.ac.uk/research/nl/bea2019st/).
+  2. Extract and rename so the M2 files land at:
        data/corpora/wi-locness/m2/{A,B,C}.train.gold.bea19.m2
-       data/corpora/wi-locness/m2/ABCN.dev.gold.bea19.m2   # VERIFY filenames
-  License: see DATA_LICENSES.md (non-commercial research use).""",
+       data/corpora/wi-locness/m2/{A,B,C,N}.dev.gold.bea19.m2
+     (filenames VERIFIED 2026-07-25 against the real v2.1 archive)
+  License: W&I (Cambridge) + LOCNESS agreements — non-commercial research
+  only, NO redistribution (see DATA_LICENSES.md).""",
     "merlin": """\
 MERLIN corpus (German / Italian / Czech learner texts, CEFR-rated)
   1. Download merlin-text-v1.2.zip (plain-text distribution) from the Eurac
@@ -73,18 +75,26 @@ def prepare_wi_locness() -> list[Sample]:
     samples: list[Sample] = []
     found = False
     for band in ("A", "B", "C"):
-        for split, pattern in (("train", f"{band}.train.gold.bea19.m2"),):
-            p = m2dir / pattern
+        p = m2dir / f"{band}.train.gold.bea19.m2"
+        if p.exists():
+            found = True
+            samples.extend(parse_m2_file(p, band, "train"))
+    # v2.1 ships PER-BAND dev files (A/B/C.dev + N.dev), so dev sentences DO
+    # carry bands — this amends DECISION 7, whose premise (band-less dev) was
+    # written against the pooled ABCN.dev file only. Banded dev preferred;
+    # pooled ABCN.dev is only a fallback for older distributions (band "N" =
+    # no CEFR label recoverable).
+    banded_dev = [m2dir / f"{b}.dev.gold.bea19.m2" for b in ("A", "B", "C", "N")]
+    if any(p.exists() for p in banded_dev):
+        for band, p in zip(("A", "B", "C", "N"), banded_dev, strict=True):
             if p.exists():
                 found = True
-                samples.extend(parse_m2_file(p, band, split))
-    dev = m2dir / "ABCN.dev.gold.bea19.m2"
-    if dev.exists():
-        found = True
-        # Dev file mixes bands; band info is not recoverable per sentence from
-        # this file alone, so dev sentences carry no CEFR label. # DECISION:
-        # English CEFR eval uses the banded train files; GEC prefers dev.
-        samples.extend(parse_m2_file(dev, "N", "dev"))
+                samples.extend(parse_m2_file(p, band, "dev"))
+    else:
+        dev = m2dir / "ABCN.dev.gold.bea19.m2"
+        if dev.exists():
+            found = True
+            samples.extend(parse_m2_file(dev, "N", "dev"))
     if not found:
         _die("wi-locness", m2dir)
     return samples

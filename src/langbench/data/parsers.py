@@ -8,7 +8,8 @@ expected, never failing silently or producing partial garbage.
 
 # MERLIN: VERIFIED 2026-07-24 against the real v1.2 plain-text download.
 # COWS-L2H: VERIFIED 2026-07-25 against the real GitHub repo.
-# W&I+LOCNESS: still # VERIFY against the real download.
+# W&I+LOCNESS: VERIFIED 2026-07-25 against the real v2.1 archive (parser
+# needed no changes; per-band counts match the shipped readme exactly).
 """
 
 from __future__ import annotations

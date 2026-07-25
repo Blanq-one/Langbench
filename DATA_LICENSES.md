@@ -10,15 +10,34 @@ obtain each corpus themselves under its own license via
 All URLs below are # VERIFY items (this file was written without live access).
 
 ## W&I+LOCNESS (English — GEC + CEFR bands A/B/C)
-- Source: BEA-2019 Shared Task on Grammatical Error Correction; Write &
-  Improve (Cambridge) + LOCNESS (native essays, Louvain).
-- License: research use under the terms stated on the BEA-2019 data page;
-  redistribution not permitted. # VERIFY exact terms
+- Source: BEA-2019 Shared Task on Grammatical Error Correction
+  (https://www.cl.cam.ac.uk/research/nl/bea2019st/),
+  wi+locness_v2.1.bea19.tar.gz; Write & Improve (Cambridge) + LOCNESS
+  (native essays, Louvain). Downloaded 2026-07-25.
+- License (VERIFIED 2026-07-25 from licence.wi.txt and license.locness.txt
+  inside the archive, as displayed at download):
+  - W&I: Cambridge English Write & Improve (CEWI) Dataset Licence — copyright
+    University of Cambridge; non-exclusive, non-transferable right for
+    NON-COMMERCIAL research and educational purposes only; published excerpts
+    limited to under 100 words; citation of Yannakoudakis et al. (2018)
+    required in all publications.
+  - LOCNESS: non-commercial use only; credit to CECL (UCLouvain) with a copy
+    of publications to CECL; **no part of the corpus may be distributed to a
+    third party without specific authorization from CECL**.
+  - Redistribution is therefore NOT permitted for either corpus. This
+    repository complies by construction: it ships only scripts and sampling
+    manifests (item IDs + seeds), NEVER the texts — not in fixtures, not in
+    the raw cache (gitignored), not in the results DB (schema-restricted to
+    derived scalars and closed-set labels).
 - Cite: Bryant, Felice, Andersen, Briscoe (2019), "The BEA-2019 Shared Task
-  on Grammatical Error Correction", BEA@ACL. Also Granger (1998) for LOCNESS.
+  on Grammatical Error Correction", BEA@ACL; Yannakoudakis, Andersen,
+  Geranpayeh, Briscoe, Nicholls (2018), "Developing an automated writing
+  placement system for ESL learners", Applied Measurement in Education
+  (required by the W&I licence). Also Granger (1998) for LOCNESS.
 - Note: CEFR granularity is A/B/C bands, not six levels. English CEFR metrics
   are computed on 3 bands and reported as such — never pooled with six-level
-  QWK from MERLIN languages.
+  QWK from MERLIN languages. v2.1 ships per-band dev files, so dev sentences
+  carry bands too (see DECISION 34).
 
 ## MERLIN (German, Italian, Czech — GEC target hypotheses + six-level CEFR)
 - Source: MERLIN Written Learner Corpus for Czech, German, Italian v1.2,

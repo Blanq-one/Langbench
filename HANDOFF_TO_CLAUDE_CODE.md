@@ -173,6 +173,11 @@ leakage around `matplotlib`/`nio` (overrides exist in pyproject), and the
     text parts instead of reading parts[0]: responses already carry
     thoughtSignature fields, and a future thought/text part split must not
     break the judge phase mid-run.
+34. (Live integration, 2026-07-25) AMENDS DECISION 7: W&I v2.1 ships
+    per-band dev M2 files (A/B/C/N.dev.gold.bea19.m2), so dev sentences DO
+    carry bands — the "dev is band-less" premise held only for the pooled
+    ABCN.dev file. prepare_wi_locness now parses banded dev (pooled file
+    kept as fallback); English CEFR pools banded train + dev, GEC unchanged.
 
 ## C. Live-integration checklist, in order
 
