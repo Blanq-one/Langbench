@@ -99,7 +99,9 @@ leakage around `matplotlib`/`nio` (overrides exist in pyproject), and the
 6. gold_label is stored in the results DB — QWK needs (pred, gold) and gold
    CEFR labels are closed-set values, not corpus text.
 7. W&I ABCN dev file carries no per-sentence band, so English CEFR uses the
-   banded train files; dev feeds GEC.
+   banded train files; dev feeds GEC. [AMENDED by DECISION 34, 2026-07-25:
+   v2.1 ships per-band dev files, so dev sentences do carry bands; English
+   CEFR pools banded train + dev.]
 8. COWS-L2H course levels are not CEFR; Spanish is GEC-only (a mapping was
    rejected as indefensible without external calibration).
 9. CLC-FCE deferred: registration-gated, spec said "if easily obtainable".
