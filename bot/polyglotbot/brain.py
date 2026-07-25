@@ -69,6 +69,7 @@ class Brain:
             rate_limit=RateLimit(rpm=winner.rate_limit_rpm, rpd=winner.rate_limit_rpd),
             pricing=Pricing(input_per_mtok=0.0, output_per_mtok=0.0),
             max_output_tokens=winner.max_output_tokens,
+            extra_body=winner.extra_body,
         )
         self.adapter = build_adapter(provider, client)
         self.limiter = RateLimiter()

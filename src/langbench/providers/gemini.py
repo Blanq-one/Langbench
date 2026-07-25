@@ -36,10 +36,21 @@ class GeminiAdapter(ProviderAdapter):
         return url, body, {"x-goog-api-key": self.api_key}
 
     def _parse(self, body: dict[str, Any]) -> tuple[str, int | None, int | None]:
-        text = body["candidates"][0]["content"]["parts"][0]["text"]
+        # Join ALL text parts, not parts[0]: Gemini may split a response into
+        # multiple parts (and thinking models flag thought parts with
+        # "thought": true, which must never leak into content). Non-text parts
+        # (e.g. bare thoughtSignature) are skipped.
+        parts = body["candidates"][0]["content"]["parts"]
+        texts = [
+            str(p["text"])
+            for p in parts
+            if isinstance(p, dict) and "text" in p and not p.get("thought")
+        ]
+        if not texts:
+            raise KeyError("no non-thought text parts in candidates[0].content.parts")
         usage = body.get("usageMetadata") or {}
         return (
-            str(text),
+            "".join(texts),
             usage.get("promptTokenCount"),
             usage.get("candidatesTokenCount"),
         )

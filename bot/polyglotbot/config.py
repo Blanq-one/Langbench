@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Any
 
 import yaml
 from pydantic import BaseModel, Field
@@ -32,6 +33,9 @@ class WinnerConfig(BaseModel):
     rate_limit_rpm: int = Field(gt=0)
     rate_limit_rpd: int = Field(gt=0)
     max_output_tokens: int = 1024
+    # Wire extras the benchmark measured with (e.g. Qwen reasoning_format);
+    # the bot must call the model with the identical settings.
+    extra_body: dict[str, Any] = Field(default_factory=dict)
 
 
 class BotSettings(BaseModel):

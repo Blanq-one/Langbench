@@ -50,6 +50,14 @@ models:
     rate_limit: { rpm: 30, rpd: 1000 }
     pricing: { input_per_mtok: 0.60, output_per_mtok: 3.00 }
     max_output_tokens: 1024
+    # DECISION: reasoning_format hidden, not reasoning_effort none — "none"
+    # would change the model's capability and answer a question nobody asked
+    # (Qwen-without-reasoning isn't what a bot operator would deploy); leaving
+    # it raw would punish Qwen for our parser's first-balanced-brace
+    # heuristic, a harness artifact, not model quality. Hidden preserves
+    # capability while keeping content parseable. (Smoke call 2026-07-24
+    # showed a <think> block in message.content without this.)
+    extra_body: { reasoning_format: hidden }
 
   # DECISION: fourth Groq candidate added — models run in parallel loops, so
   # an extra candidate is ~free in calendar time, and family diversity

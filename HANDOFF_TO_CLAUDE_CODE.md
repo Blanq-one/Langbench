@@ -158,6 +158,21 @@ leakage around `matplotlib`/`nio` (overrides exist in pyproject), and the
     RPM/RPD dominate at this call volume and 429 backoff absorbs the rest.
     Groq's 6K TPM on the 8B model may bind before RPM; the estimator prints
     this caveat and the models.yaml row carries the note.
+32. (Live integration, 2026-07-24) qwen3.6-27b runs with
+    extra_body reasoning_format=hidden. "none" would change the model's
+    capability and answer a question nobody asked (Qwen-without-reasoning
+    isn't what a bot operator would deploy); leaving it raw would punish
+    Qwen for our parser's first-balanced-brace heuristic — a harness
+    artifact, not model quality. Hidden preserves capability while keeping
+    content parseable. extra_body is hashed into the cache key (semantics
+    change => cache invalidation) and emit_bot_config propagates it so the
+    bot deploys with the identical wire settings the benchmark measured.
+    Reasoning models' completion_tokens (and $/1K messages) deliberately
+    include reasoning overhead — a bot operator pays it too.
+33. (Live integration, 2026-07-24) Gemini adapter joins ALL non-thought
+    text parts instead of reading parts[0]: responses already carry
+    thoughtSignature fields, and a future thought/text part split must not
+    break the judge phase mid-run.
 
 ## C. Live-integration checklist, in order
 

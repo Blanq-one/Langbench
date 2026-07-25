@@ -181,6 +181,9 @@ class OpenAICompatAdapter(ProviderAdapter):
             "temperature": req.temperature,
             "max_tokens": req.max_tokens,
         }
+        # Per-model wire extras (e.g. Groq reasoning_format). Merged last so a
+        # registry row can override defaults; keys also feed the cache key.
+        body.update(model.extra_body)
         headers = {"Authorization": f"Bearer {self.api_key}"}
         return f"{self.provider.base_url}/chat/completions", body, headers
 

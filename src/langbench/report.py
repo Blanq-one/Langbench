@@ -15,6 +15,7 @@ Reporting rules enforced here (not just promised in the README):
 
 from __future__ import annotations
 
+import json
 import statistics
 from dataclasses import dataclass
 from pathlib import Path
@@ -227,6 +228,9 @@ def render_markdown(reports: list[ModelReport], results: ResultsDB) -> str:
         "gpt-4o-mini's price is its historical list price ($0.15/$0.60 per 1M):",
         "OpenAI's current pricing page no longer lists the model, so it serves",
         "only as a cost anchor, not a live offer.",
+        "Reasoning models (qwen3.6-27b, gpt-oss-20b) carry their reasoning-token",
+        "overhead inside completion_tokens and therefore inside $/1K messages.",
+        "That is deliberate and honest: a bot operator pays those tokens too.",
         "",
         "| Model | GEC GLEU | QWK (6-lvl) | QWK (en bands) | Judge (1-5) "
         "| Format OK | p50 ms | $/1K msgs |",
@@ -439,7 +443,10 @@ def emit_bot_config(reports: list[ModelReport], reg: Registry, path: Path) -> st
         f"prompt_version: {reg.eval.prompt_versions['feedback']}\n"
         f"rate_limit_rpm: {m.rate_limit.rpm}\n"
         f"rate_limit_rpd: {m.rate_limit.rpd}\n"
-        f"max_output_tokens: {m.max_output_tokens}\n",
+        f"max_output_tokens: {m.max_output_tokens}\n"
+        # extra_body rides along so the bot deploys with the IDENTICAL wire
+        # settings the benchmark measured (e.g. Qwen reasoning_format).
+        f"extra_body: {json.dumps(m.extra_body)}\n",
         encoding="utf-8",
     )
     return winner.model_key

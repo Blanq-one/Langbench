@@ -215,7 +215,14 @@ class Runner:
             provider=model.provider,
             model_id=model.model_id,
             prompt_version=prompt_version,
-            params={"temperature": req.temperature, "max_tokens": req.max_tokens},
+            # extra_body is part of the key on purpose: it changes response
+            # semantics (e.g. reasoning_format), so a cached pre-extra_body
+            # response must never satisfy a post-extra_body request.
+            params={
+                "temperature": req.temperature,
+                "max_tokens": req.max_tokens,
+                "extra_body": model.extra_body,
+            },
             input_text=f"{req.system or ''}\n\x00\n{req.user}",
         )
         cached = await asyncio.to_thread(self.cache.get, key)

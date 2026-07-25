@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Literal, cast
+from typing import Any, Literal, cast
 
 import yaml
 from pydantic import BaseModel, Field, field_validator
@@ -76,6 +76,10 @@ class ModelConfig(BaseModel):
     rate_limit: RateLimit
     pricing: Pricing
     max_output_tokens: int = 1024
+    # Provider-specific request-body params merged verbatim into the wire
+    # request by OpenAI-compatible adapters (e.g. Groq reasoning_format).
+    # Part of the cache key: changing it must invalidate cached responses.
+    extra_body: dict[str, Any] = Field(default_factory=dict)
     notes: str = ""
 
     @field_validator("key")

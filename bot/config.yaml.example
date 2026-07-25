@@ -12,3 +12,6 @@ prompt_version: v1
 rate_limit_rpm: 30
 rate_limit_rpd: 14400
 max_output_tokens: 1024
+# Wire extras the benchmark measured with (empty for most models; e.g.
+# {"reasoning_format": "hidden"} if the Qwen row wins).
+extra_body: {}
