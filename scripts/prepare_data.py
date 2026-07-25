@@ -59,10 +59,10 @@ MERLIN corpus (German / Italian / Czech learner texts, CEFR-rated)
   License: CC BY-SA 4.0, no registration (see DATA_LICENSES.md).""",
     "cowsl2h": """\
 COWS-L2H (Corpus of Written Spanish, L2/Heritage speakers)
-  1. git clone the COWS-L2H GitHub repository        # VERIFY current URL
-     into data/corpora/cowsl2h/
-  Layout expected: <course>/original/*.txt with corrected/ siblings.
-  License: see DATA_LICENSES.md.""",
+  1. git clone https://github.com/ucdaviscl/cowsl2h data/corpora/cowsl2h
+  Layout: <topic>/<term>/essays/*.txt with corrected/ sibling directories;
+  second-instructor corrections carry ' (1)' in the filename.
+  License: Apache 2.0 (see DATA_LICENSES.md).""",
 }
 
 

@@ -124,14 +124,23 @@ class TestMerlin:
 class TestCows:
     def test_parses_tree(self, fixtures_dir: Path) -> None:
         samples = parse_cowsl2h_dir(fixtures_dir / "cowsl2h")
-        # essay2 has no corrected counterpart => skipped
+        # essay 999 has no correction; term SU17 has no corrected/ dir => both skipped
         assert len(samples) == 1
         s = samples[0]
         assert s.lang == "es"
+        assert s.id == "cows-vacation_F17_essays_120.F17_Vacation.txt"
         assert s.cefr_label is None  # course levels are not CEFR; GEC-only
-        assert len(s.reference_corrections) == 2  # both annotators picked up
+        # Pairing is by participant-id prefix despite the case difference
+        # (essays/...F17_Vacation.txt vs corrected/...F17_vacation.corrected.txt),
+        # and the ' (1)' second-instructor correction becomes a second reference.
+        assert len(s.reference_corrections) == 2
+        assert any("A mí me gusta el clima" in r for r in s.reference_corrections)
+        # The misfiled annotation file in corrected/ is excluded: error markup
+        # must never become a GEC reference. And the byte-identical typo'd
+        # duplicate ('corrrected') collapses by content-dedupe — still 2 refs.
+        assert not any("<pr:" in r for r in s.reference_corrections)
 
     def test_wrong_layout_fails_loudly(self, tmp_path: Path) -> None:
         (tmp_path / "whatever").mkdir()
-        with pytest.raises(ParserFormatError, match="original"):
+        with pytest.raises(ParserFormatError, match="essays"):
             parse_cowsl2h_dir(tmp_path)

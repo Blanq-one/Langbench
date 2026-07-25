@@ -50,6 +50,9 @@ select = ["E", "F", "I", "UP", "B"]
 python_version = "3.11"
 strict = true
 files = ["src", "scripts", "bot/polyglotbot"]
+# Downloaded corpora ship their own Python (e.g. COWS-L2H repo scripts);
+# ruff skips them via .gitignore but mypy needs the explicit exclude.
+exclude = ["^data/"]
 # matrix-nio and errant ship no type stubs.
 [[tool.mypy.overrides]]
 module = ["nio.*", "errant.*", "matplotlib.*", "prometheus_client.*"]

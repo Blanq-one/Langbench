@@ -41,11 +41,18 @@ All URLs below are # VERIFY items (this file was written without live access).
   reference, TH2 (appropriateness) deliberately excluded.
 
 ## COWS-L2H (Spanish — GEC only)
-- Source: UC Davis Computational Linguistics Lab, GitHub.
-- License: per repository license file. # VERIFY
+- Source: UC Davis Computational Linguistics Lab,
+  https://github.com/ucdaviscl/cowsl2h (cloned 2026-07-25).
+- License: Apache License 2.0 (VERIFIED 2026-07-25 from the repository's
+  LICENSE file).
 - Cite: Davidson, Yamada, Fernandez-Mira, Carando, Sanchez-Gutierrez,
   Sagae (2020), "Developing NLP tools with a new corpus of learner Spanish",
   LREC.
+- Notes from the real repository: layout is <topic>/<term>/essays/ with
+  corrected/ siblings (holistic corrections by graduate-level Spanish
+  instructors); a subset carries a second instructor's correction (' (1)'
+  files) used as an additional GEC reference; annotated/ error-type files
+  are not GEC references.
 - Note: COWS-L2H is organized by course level, which is NOT a CEFR label.
   Spanish is therefore GEC-only in this benchmark. A course→CEFR mapping was
   considered and rejected as not defensible without an external calibration

@@ -7,7 +7,8 @@ therefore (a) names the exact structure it expects in its docstring, and
 expected, never failing silently or producing partial garbage.
 
 # MERLIN: VERIFIED 2026-07-24 against the real v1.2 plain-text download.
-# W&I+LOCNESS and COWS-L2H: still # VERIFY against real downloads.
+# COWS-L2H: VERIFIED 2026-07-25 against the real GitHub repo.
+# W&I+LOCNESS: still # VERIFY against the real download.
 """
 
 from __future__ import annotations
@@ -213,34 +214,52 @@ def parse_merlin_dir(root: Path, lang: str) -> list[Sample]:
 
 
 # ---------------------------------------------------------------------------
-# COWS-L2H (Spanish, GEC-only). Expected layout from the GitHub repo:
-#   <root>/<course_dir>/original/<essay>.txt
-#   <root>/<course_dir>/corrected/<essay>.txt   (annotator 1)
-#   optionally .../corrected2/<essay>.txt       (annotator 2)
-# Essays pair by identical filename. Course levels are NOT CEFR labels, so
-# cefr_label stays None (Spanish is GEC-only; see eval.yaml comment).
+# COWS-L2H (Spanish, GEC-only). Layout VERIFIED 2026-07-25 against the real
+# repo (github.com/ucdaviscl/cowsl2h):
+#   <topic>/<term>/essays/<pid>.<TERM>_<Topic>.txt           (learner original)
+#   <topic>/<term>/corrected/<pid>.<term>_<topic>.corrected.txt
+#   second-instructor corrections: same name with ' (1)' appended
+# Pairing is by the participant-id prefix (before the first '.') within one
+# term directory: essay and corrected filenames differ in case and suffix, so
+# exact-name matching does not work. corrected/ holds plain corrected text
+# (holistic instructor corrections); annotated/ holds per-error-type
+# annotations and is NOT a GEC reference. Course levels are NOT CEFR labels,
+# so cefr_label stays None (Spanish is GEC-only; see eval.yaml comment).
 # ---------------------------------------------------------------------------
 
 def parse_cowsl2h_dir(root: Path) -> list[Sample]:
-    originals = sorted(root.rglob("original/*.txt"))
-    if not originals:
+    essays = sorted(root.rglob("essays/*.txt"))
+    if not essays:
         raise ParserFormatError(
             root,
-            "no files matching **/original/*.txt; expected the COWS-L2H repo layout "
-            "with original/ and corrected/ sibling directories per course",
+            "no files matching **/essays/*.txt; expected the COWS-L2H repo layout "
+            "<topic>/<term>/essays/ with corrected/ sibling directories",
         )
     samples: list[Sample] = []
-    for orig in originals:
-        course_dir = orig.parent.parent
+    for orig in essays:
+        corr_dir = orig.parent.parent / "corrected"
+        if not corr_dir.is_dir():
+            continue  # this whole term has no corrections
+        pid = orig.name.split(".", 1)[0]
         refs: list[str] = []
-        for corr_name in ("corrected", "corrected2"):
-            cand = course_dir / corr_name / orig.name
-            if cand.exists():
+        for cand in sorted(corr_dir.iterdir()):
+            # corrected/ dirs in the real repo also contain misfiled
+            # annotation files ('anotated', 'annnotated', ...) full of error
+            # markup. A real correction's filename always contains 'corr',
+            # including the repo's typo variants ('correcteed', 'correced',
+            # 'correted', 'corrected(1)').
+            if (
+                cand.suffix == ".txt"
+                and cand.name.startswith(f"{pid}.")
+                and "corr" in cand.name.lower()
+            ):
                 body = cand.read_text(encoding="utf-8", errors="replace").strip()
-                if body:
+                # Dedupe by content: the repo contains byte-identical
+                # duplicates under typo'd names ('corrrected', 'corrected.').
+                if body and body not in refs:
                     refs.append(body)
         if not refs:
-            continue  # uncorrected essays are unusable for GEC; skip, count later
+            continue  # uncorrected essays are unusable for GEC; skip
         src = orig.read_text(encoding="utf-8", errors="replace").strip()
         if not src:
             continue
@@ -258,6 +277,6 @@ def parse_cowsl2h_dir(root: Path) -> list[Sample]:
         )
     if not samples:
         raise ParserFormatError(
-            root, "found original essays but zero with a corrected/ counterpart"
+            root, "found essays but zero with a corrected/ counterpart"
         )
     return samples

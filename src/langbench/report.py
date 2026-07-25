@@ -262,6 +262,8 @@ def render_markdown(reports: list[ModelReport], results: ResultsDB) -> str:
         "- Free-tier latency is not paid-tier latency.",
         "- Spanish is GEC-only (COWS-L2H has course levels, not CEFR labels).",
         "- English CEFR is band-granular; do not compare its QWK to six-level QWK.",
+        "- Six-level QWK effectively runs on five levels: MERLIN contains",
+        "  no/negligible C2 (4 of 1,033 German texts; zero Italian or Czech).",
         "- Judge scores share one provider family (Gemini) and one rubric prompt;",
         "  correctness dimensions are calibration-checked, clarity may not be.",
         "- Models with rewrite-flag rates above ~10% edit far more than minimal:",
