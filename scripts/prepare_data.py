@@ -50,13 +50,13 @@ W&I+LOCNESS (BEA-2019 shared task data, Write & Improve + LOCNESS)
   License: see DATA_LICENSES.md (non-commercial research use).""",
     "merlin": """\
 MERLIN corpus (German / Italian / Czech learner texts, CEFR-rated)
-  1. Download the MERLIN plain-text distribution (CLARIN / merlin-platform).
-                                                     # VERIFY current URL
-  2. Extract per language to:
-       data/corpora/merlin/de/*.txt
-       data/corpora/merlin/it/*.txt
-       data/corpora/merlin/cs/*.txt
-  License: CC BY-SA (see DATA_LICENSES.md).""",
+  1. Download merlin-text-v1.2.zip (plain-text distribution) from the Eurac
+     CLARIN repository — browser required (anti-bot protection):
+       https://clarin.eurac.edu/repository/xmlui/handle/20.500.12124/59
+  2. Extract under data/corpora/merlin/ so this path exists:
+       data/corpora/merlin/merlin-text-v1.2/meta_ltext_THs/{czech,german,italian}/*.txt
+     (any nesting works; the meta_ltext_THs directory is located by search)
+  License: CC BY-SA 4.0, no registration (see DATA_LICENSES.md).""",
     "cowsl2h": """\
 COWS-L2H (Corpus of Written Spanish, L2/Heritage speakers)
   1. git clone the COWS-L2H GitHub repository        # VERIFY current URL
@@ -90,8 +90,17 @@ def prepare_wi_locness() -> list[Sample]:
     return samples
 
 
+# The zip nests language dirs under meta_ltext_THs/ (the variant that carries
+# metadata + learner text + target hypotheses) with full language names.
+MERLIN_LANG_DIRS = {"de": "german", "it": "italian", "cs": "czech"}
+
+
 def prepare_merlin(lang: str) -> list[Sample]:
-    root = CORPORA / "merlin" / lang
+    base = CORPORA / "merlin"
+    ths_dirs = sorted(base.rglob("meta_ltext_THs")) if base.exists() else []
+    if not ths_dirs:
+        _die("merlin", base / "merlin-text-v1.2" / "meta_ltext_THs")
+    root = ths_dirs[0] / MERLIN_LANG_DIRS[lang]
     if not root.exists():
         _die("merlin", root)
     return parse_merlin_dir(root, lang)

@@ -48,28 +48,76 @@ class TestM2:
             parse_m2_file(bad, "A", "dev")
 
 
+def _merlin_text(
+    rating: str = "B1",
+    learner: str = "Hallo Welt.",
+    th1_block: str = "Target hypothesis 1:\n\nHallo , Welt .",
+) -> str:
+    """Minimal file in the real v1.2 block structure."""
+    return (
+        "METADATA\n\nGeneral:\nAuthor ID: t-001\n\nRating:\n"
+        f"Overall CEFR rating: {rating}\n\n----------------\n\n"
+        f"Learner text:\n\n{learner}\n\n----------------\n\n"
+        f"{th1_block}\n\n----------------\n\nNo target hypothesis 2 available.\n"
+    )
+
+
 class TestMerlin:
     def test_parses_fixture(self, fixtures_dir: Path) -> None:
         s = parse_merlin_file(fixtures_dir / "merlin_de.txt", "de")
+        assert s is not None
         assert s.cefr_label == "B1"
         assert s.cefr_granularity == "six_level"
         assert "gestern in die Schule" in s.source_text
+        assert "Target hypothesis" not in s.source_text  # block splitting worked
+        assert "----" not in s.source_text  # separators never leak into text
+        # TH1 is the only reference; TH2 (appropriateness) is excluded. DECISION
         assert len(s.reference_corrections) == 1
         assert "bin gestern" in s.reference_corrections[0]
-        assert "Target hypothesis" not in s.source_text  # section splitting worked
+        assert "wunderschöner" not in s.reference_corrections[0]
+
+    def test_unrated_and_empty_ratings_give_no_label(self, tmp_path: Path) -> None:
+        for raw in ("unrated", "EMPTY"):
+            f = tmp_path / f"{raw}.txt"
+            f.write_text(_merlin_text(rating=raw), encoding="utf-8")
+            s = parse_merlin_file(f, "it")
+            assert s is not None
+            assert s.cefr_label is None and s.cefr_granularity is None
+            assert s.reference_corrections  # still GEC-usable via TH1
+
+    def test_th1_sentinel_means_no_references(self, tmp_path: Path) -> None:
+        f = tmp_path / "x.txt"
+        f.write_text(
+            _merlin_text(th1_block="No target hypothesis 1 available."), encoding="utf-8"
+        )
+        s = parse_merlin_file(f, "cs")
+        assert s is not None
+        assert s.reference_corrections == []
+
+    def test_empty_learner_text_returns_none(self, tmp_path: Path) -> None:
+        f = tmp_path / "x.txt"
+        f.write_text(_merlin_text(learner=""), encoding="utf-8")
+        assert parse_merlin_file(f, "de") is None
 
     def test_missing_rating_fails_loudly(self, tmp_path: Path) -> None:
         f = tmp_path / "x.txt"
-        f.write_text("Learner text:\nHallo Welt.\n", encoding="utf-8")
+        f.write_text(
+            "METADATA\nno rating here\n\n----------------\n\nLearner text:\n\nHallo Welt.\n",
+            encoding="utf-8",
+        )
         with pytest.raises(ParserFormatError, match="Overall CEFR rating"):
             parse_merlin_file(f, "de")
 
     def test_bad_rating_value_fails_loudly(self, tmp_path: Path) -> None:
         f = tmp_path / "x.txt"
-        f.write_text(
-            "Overall CEFR rating: Z9\nLearner text:\nHallo.\n", encoding="utf-8"
-        )
+        f.write_text(_merlin_text(rating="Z9"), encoding="utf-8")
         with pytest.raises(ParserFormatError, match="Z9"):
+            parse_merlin_file(f, "de")
+
+    def test_flat_file_fails_loudly(self, tmp_path: Path) -> None:
+        f = tmp_path / "x.txt"
+        f.write_text("Overall CEFR rating: B1\nLearner text:\nHallo.\n", encoding="utf-8")
+        with pytest.raises(ParserFormatError, match="dash-separated"):
             parse_merlin_file(f, "de")
 
 

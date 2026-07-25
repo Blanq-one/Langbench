@@ -1,11 +1,38 @@
+METADATA
+
+General:
 Author ID: fixture-001
-Test level: fixture
+Test language: German
+CEFR level of test: B1
+Task : fixture task - ID: 0000_000000
+Mother tongue: Fixturish
+Age: 30
+Gender: female
+
+Rating:
 Overall CEFR rating: B1
+Grammatical accuracy: B1
+Orthography: B2
+Vocabulary range: B1
+Vocabulary control: B1
+Coherence/Cohesion: B1
+Sociolinguistic appropriateness: B1
+
+----------------
 
 Learner text:
+
 Ich habe gestern in die Schule gegangen und viel gelernt.
 Es war ein schön Tag.
 
+----------------
+
 Target hypothesis 1:
-Ich bin gestern in die Schule gegangen und habe viel gelernt.
-Es war ein schöner Tag.
+
+Ich bin gestern in die Schule gegangen und habe viel gelernt . Es war ein schöner Tag .
+
+----------------
+
+Target hypothesis 2:
+
+Ich bin gestern zur Schule gegangen und habe dort sehr viel gelernt . Es war ein wunderschöner Tag .

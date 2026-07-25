@@ -6,12 +6,13 @@ therefore (a) names the exact structure it expects in its docstring, and
 (b) raises ParserFormatError with the offending path + line and what was
 expected, never failing silently or producing partial garbage.
 
-# VERIFY (all of this module): run scripts/prepare_data.py against real
-# downloads and fix these parsers first.
+# MERLIN: VERIFIED 2026-07-24 against the real v1.2 plain-text download.
+# W&I+LOCNESS and COWS-L2H: still # VERIFY against real downloads.
 """
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from langbench.data.schema import Sample
@@ -114,76 +115,101 @@ def _apply_edits(tokens: list[str], edits: list[tuple[int, int, str]]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# MERLIN. Expected layout (plain-text distribution):
-#   <root>/<lang_dir>/*.txt where each file has a metadata header containing
-#   a line like 'Overall CEFR rating: B1', a 'Learner text:' section, and —
-#   in the target-hypothesis variant — a 'Target hypothesis 1:' section.
-# lang_dir naming and section headers are the top VERIFY item in this module.
+# MERLIN v1.2 plain-text distribution (merlin-text-v1.2.zip). Format VERIFIED
+# 2026-07-24 against the real CLARIN download.
+# One file per learner text: meta_ltext_THs/{czech,german,italian}/<id>.txt
+# Blocks separated by lines of dashes ('----------------'):
+#   METADATA block containing 'Overall CEFR rating: <A1..C2 | EMPTY | unrated>'
+#   'Learner text:' block (original formatting, may span many lines)
+#   'Target hypothesis 1:' block, or the literal sentinel line
+#     'No target hypothesis 1 available.'
+#   'Target hypothesis 2:' block, or its sentinel likewise
+# EMPTY/unrated ratings => cefr_label None (still GEC-usable when TH1 exists).
+# DECISION: TH1 is the only GEC reference. TH1 is FALKO's minimal-correctness
+# hypothesis; TH2 targets appropriateness and would reward stylistic rewrites.
 # ---------------------------------------------------------------------------
 
 _MERLIN_RATING_PREFIX = "Overall CEFR rating:"
 _MERLIN_LEARNER_HEADER = "Learner text:"
 _MERLIN_TH1_HEADER = "Target hypothesis 1:"
 _MERLIN_SIX = {"A1", "A2", "B1", "B2", "C1", "C2"}
+_MERLIN_UNRATED = {"EMPTY", "UNRATED"}  # both appear in v1.2 ('unrated' lowercased)
+_MERLIN_SEPARATOR = re.compile(r"^-{4,}\s*$", re.MULTILINE)
 
 
-def parse_merlin_file(path: Path, lang: str) -> Sample:
-    text = path.read_text(encoding="utf-8", errors="replace")
-    rating: str | None = None
-    for i, ln in enumerate(text.split("\n"), 1):
-        if ln.strip().startswith(_MERLIN_RATING_PREFIX):
-            candidate = ln.split(":", 1)[1].strip().upper()
-            if candidate not in _MERLIN_SIX:
-                raise ParserFormatError(
-                    path, f"CEFR rating {candidate!r} not one of {sorted(_MERLIN_SIX)}", i
-                )
-            rating = candidate
-            break
-    if rating is None:
+def parse_merlin_file(path: Path, lang: str) -> Sample | None:
+    """One MERLIN text file -> Sample, or None for structurally valid but
+    unusable files (empty learner text). Structural surprises raise."""
+    text = path.read_text(encoding="utf-8")
+    blocks = [b.strip() for b in _MERLIN_SEPARATOR.split(text) if b.strip()]
+    if len(blocks) < 2:
         raise ParserFormatError(
-            path, f"no line starting with {_MERLIN_RATING_PREFIX!r} found in metadata header"
+            path,
+            f"expected dash-separated METADATA + section blocks, got {len(blocks)} block(s)",
         )
-    learner = _merlin_section(path, text, _MERLIN_LEARNER_HEADER)
-    th1: str | None
-    try:
-        th1 = _merlin_section(path, text, _MERLIN_TH1_HEADER)
-    except ParserFormatError:
-        th1 = None  # target hypotheses ship separately in some distributions
+
+    rating: str | None = None
+    found_rating_line = False
+    for i, ln in enumerate(blocks[0].split("\n"), 1):
+        if ln.strip().startswith(_MERLIN_RATING_PREFIX):
+            found_rating_line = True
+            candidate = ln.split(":", 1)[1].strip().upper()
+            if candidate in _MERLIN_SIX:
+                rating = candidate
+            elif candidate in _MERLIN_UNRATED:
+                rating = None  # no CEFR label; file may still serve GEC
+            else:
+                raise ParserFormatError(
+                    path,
+                    f"CEFR rating {candidate!r} not one of {sorted(_MERLIN_SIX)} "
+                    f"or {sorted(_MERLIN_UNRATED)}",
+                    i,
+                )
+            break
+    if not found_rating_line:
+        raise ParserFormatError(
+            path, f"no line starting with {_MERLIN_RATING_PREFIX!r} in the METADATA block"
+        )
+
+    learner = _merlin_block_body(blocks[1:], _MERLIN_LEARNER_HEADER)
+    if learner is None:
+        raise ParserFormatError(
+            path, f"no block starting with {_MERLIN_LEARNER_HEADER!r} after the separator"
+        )
+    if not learner:
+        return None  # empty learner text: valid file, unusable sample
+    th1 = _merlin_block_body(blocks[1:], _MERLIN_TH1_HEADER)  # sentinel block => None
+
     return Sample(
         id=f"merlin-{lang}-{path.stem}",
         lang=lang,
         source_text=learner,
         reference_corrections=[th1] if th1 else [],
         cefr_label=rating,
-        cefr_granularity="six_level",
+        cefr_granularity="six_level" if rating else None,
         split="dev",
     )
 
 
-def _merlin_section(path: Path, text: str, header: str) -> str:
-    if header not in text:
-        raise ParserFormatError(path, f"section header {header!r} not found")
-    after = text.split(header, 1)[1]
-    # Section runs until the next 'Something:' header line or EOF.
-    lines: list[str] = []
-    for ln in after.split("\n"):
-        stripped = ln.strip()
-        if stripped.endswith(":") and len(stripped.split()) <= 5 and lines:
-            break
-        lines.append(ln)
-    body = "\n".join(lines).strip()
-    if not body:
-        raise ParserFormatError(path, f"section {header!r} is empty")
-    return body
+def _merlin_block_body(blocks: list[str], header: str) -> str | None:
+    """Body of the block starting with `header`, or None when no such block
+    exists (e.g. the 'No target hypothesis N available.' sentinel instead)."""
+    for b in blocks:
+        if b.startswith(header):
+            return b[len(header):].strip()
+    return None
 
 
 def parse_merlin_dir(root: Path, lang: str) -> list[Sample]:
     files = sorted(root.glob("*.txt"))
     if not files:
         raise ParserFormatError(
-            root, "no *.txt files found; expected MERLIN plain-text exports here"
+            root, "no *.txt files found; expected meta_ltext_THs/<language>/*.txt"
         )
-    return [parse_merlin_file(p, lang) for p in files]
+    samples = [s for p in files if (s := parse_merlin_file(p, lang)) is not None]
+    if not samples:
+        raise ParserFormatError(root, "every file parsed to an unusable (empty) sample")
+    return samples
 
 
 # ---------------------------------------------------------------------------

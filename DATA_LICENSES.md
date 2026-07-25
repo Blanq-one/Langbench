@@ -21,10 +21,24 @@ All URLs below are # VERIFY items (this file was written without live access).
   QWK from MERLIN languages.
 
 ## MERLIN (German, Italian, Czech — GEC target hypotheses + six-level CEFR)
-- Source: MERLIN project, distributed via CLARIN.
-- License: CC BY-SA 4.0. # VERIFY version
-- Cite: Boyd, Hana, Nicolas, Meurers, Wisniewski, Abel, Schöne, Štindlová,
-  Vettori (2014), "The MERLIN corpus: Learner language and the CEFR", LREC.
+- Source: MERLIN Written Learner Corpus for Czech, German, Italian v1.2,
+  Eurac Research CLARIN Centre repository,
+  https://clarin.eurac.edu/repository/xmlui/handle/20.500.12124/59
+  (merlin-text-v1.2.zip + merlin-metadata-v1.2.zip; browser download —
+  repository sits behind anti-bot protection). Downloaded 2026-07-24,
+  no registration required.
+- License: CC BY-SA 4.0 (Attribution-ShareAlike 4.0 International —
+  VERIFIED 2026-07-24 from the LICENSE file inside merlin-text-v1.2.zip).
+- Cite (corpus): Wisniewski, Abel, Vodičková, et al. (2018), "MERLIN Written
+  Learner Corpus for Czech, German, Italian 1.2", Eurac Research CLARIN
+  Centre, hdl:20.500.12124/59.
+- Cite (paper): Boyd, Hana, Nicolas, Meurers, Wisniewski, Abel, Schöne,
+  Štindlová, Vettori (2014), "The MERLIN corpus: Learner language and the
+  CEFR", LREC.
+- Notes from the real distribution: 2,287 texts (1,033 de / 813 it / 441 cs);
+  ratings span A1-C2 plus literal "EMPTY"/"unrated" values (mapped to
+  no-CEFR-label); target hypothesis TH1 (minimal correction) is the GEC
+  reference, TH2 (appropriateness) deliberately excluded.
 
 ## COWS-L2H (Spanish — GEC only)
 - Source: UC Davis Computational Linguistics Lab, GitHub.
