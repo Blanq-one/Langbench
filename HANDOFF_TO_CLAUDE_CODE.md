@@ -144,6 +144,20 @@ leakage around `matplotlib`/`nio` (overrides exist in pyproject), and the
     the OS level. (Mid-build review decision.)
 28. English is band-granular and never pooled with six-level QWK; the report
     carries two separate QWK columns.
+29. (Live integration, 2026-07-24) Fourth Groq candidate added
+    (openai/gpt-oss-20b): models run in parallel loops so an extra candidate
+    is ~free in calendar time, and family diversity (Llama/Qwen/OpenAI-OSS)
+    strengthens the comparison. qwen/qwen3.6-27b replaces the retired
+    gemma2-9b-it.
+30. (Live integration, 2026-07-24) Judge is gemini-3.5-flash-lite, not a
+    regular Flash model: this account's Free tier caps ALL regular Flash
+    models at 20 RPD; Flash-Lite's 500 RPD makes the ~1,030-call judge phase
+    ~2-3 days instead of 50+. gemma-4-26b (30 RPM / 14400 RPD, free) sits in
+    models.yaml as a commented-out quota-emergency judge fallback.
+31. (Live integration, 2026-07-24) No TPM buckets in the rate limiter:
+    RPM/RPD dominate at this call volume and 429 backoff absorbs the rest.
+    Groq's 6K TPM on the 8B model may bind before RPM; the estimator prints
+    this caveat and the models.yaml row carries the note.
 
 ## C. Live-integration checklist, in order
 

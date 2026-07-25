@@ -200,6 +200,9 @@ class Runner:
             f"{judge.rate_limit.rpd}/day => ~{jdays:.1f} calendar day(s)",
             "",
             "Run with --resume (default) across days; completed items are never re-called.",
+            "Caveat: only RPM/RPD are modeled. Provider TPM (tokens/minute) caps are not;",
+            "on Groq the 8B model's 6K TPM can bind before its RPM does, so expect some",
+            "429 backoffs the day-count above does not predict.",
         ]
         return "\n".join(lines)
 

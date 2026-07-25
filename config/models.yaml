@@ -1,9 +1,17 @@
-# Model registry. EVERY model id, rate limit, and price below is a best-known
-# placeholder marked VERIFY. Run scripts/discover_models.py to regenerate ids
-# from live provider endpoints, then fill real limits from provider dashboards.
+# Model registry. Rate limits are PER (provider, model) and were confirmed
+# against the account dashboards on 2026-07-24 (Groq console; Google AI Studio
+# rate-limit page, Free tier). Ids for Groq rows were reconciled against the
+# live /models listing via scripts/discover_models.py the same day.
+# OpenRouter and Mistral rows are still unverified placeholders (no keys yet)
+# and stay marked VERIFY.
 #
-# Rate limits are PER (provider, model). Groq in particular sets much lower
-# daily quotas on large models than small ones; do not copy limits across rows.
+# Groq sets much lower daily quotas on large models than small ones; do not
+# copy limits across rows.
+#
+# NOTE on TPM: this registry (and the rate limiter) models RPM/RPD only.
+# Groq also enforces per-model TPM/TPD token budgets that the limiter cannot
+# see; the estimator prints a caveat. # DECISION: no TPM buckets — at this
+# call volume RPM/RPD dominate, and 429 backoff absorbs the rest.
 #
 # pricing = paid list price of the same model (USD per 1M tokens). Free-tier
 # runs cost $0; the report uses these list prices for the $/1K-messages
@@ -11,32 +19,48 @@
 # price exists.
 
 models:
-  # ---- Groq candidates ----
+  # ---- Groq candidates (limits confirmed from Groq console, 2026-07-24) ----
   - key: groq/llama-3.1-8b-instant
     provider: groq
-    model_id: llama-3.1-8b-instant          # VERIFY current id
+    model_id: llama-3.1-8b-instant
     display_name: Llama 3.1 8B (Groq)
     enabled: auto
-    rate_limit: { rpm: 30, rpd: 14400 }     # VERIFY per-model limits
-    pricing: { input_per_mtok: 0.05, output_per_mtok: 0.08 }   # VERIFY
+    rate_limit: { rpm: 30, rpd: 14400 }
+    # Groq also caps this model at 6K TPM / 500K TPD; at our payload sizes the
+    # 6K TPM is likely the binding constraint, not the 30 RPM modeled here.
+    pricing: { input_per_mtok: 0.05, output_per_mtok: 0.08 }
     max_output_tokens: 1024
 
   - key: groq/llama-3.3-70b-versatile
     provider: groq
-    model_id: llama-3.3-70b-versatile       # VERIFY current id
+    model_id: llama-3.3-70b-versatile
     display_name: Llama 3.3 70B (Groq)
     enabled: auto
-    rate_limit: { rpm: 30, rpd: 1000 }      # VERIFY: 70B daily quota is far below 8B's
-    pricing: { input_per_mtok: 0.59, output_per_mtok: 0.79 }   # VERIFY
+    rate_limit: { rpm: 30, rpd: 1000 }      # 70B daily quota is far below 8B's
+    pricing: { input_per_mtok: 0.59, output_per_mtok: 0.79 }
     max_output_tokens: 1024
 
-  - key: groq/gemma2-9b-it
+  # gemma2-9b-it was retired from Groq (absent from the live /models listing
+  # and the pricing page, 2026-07-24). Replaced by qwen3.6-27b below.
+  - key: groq/qwen3.6-27b
     provider: groq
-    model_id: gemma2-9b-it                  # VERIFY current id (may be retired)
-    display_name: Gemma 2 9B (Groq)
+    model_id: qwen/qwen3.6-27b
+    display_name: Qwen 3.6 27B (Groq)
     enabled: auto
-    rate_limit: { rpm: 30, rpd: 14400 }     # VERIFY
-    pricing: { input_per_mtok: 0.20, output_per_mtok: 0.20 }   # VERIFY
+    rate_limit: { rpm: 30, rpd: 1000 }
+    pricing: { input_per_mtok: 0.60, output_per_mtok: 3.00 }
+    max_output_tokens: 1024
+
+  # DECISION: fourth Groq candidate added — models run in parallel loops, so
+  # an extra candidate is ~free in calendar time, and family diversity
+  # (Llama / Qwen / OpenAI-OSS) strengthens the comparison.
+  - key: groq/gpt-oss-20b
+    provider: groq
+    model_id: openai/gpt-oss-20b
+    display_name: GPT-OSS 20B (Groq)
+    enabled: auto
+    rate_limit: { rpm: 30, rpd: 1000 }
+    pricing: { input_per_mtok: 0.075, output_per_mtok: 0.30 }
     max_output_tokens: 1024
 
   # ---- OpenRouter free-tier candidates (only used if OPENROUTER_API_KEY set) ----
@@ -71,22 +95,46 @@ models:
   # ---- OpenAI reference point (Pangea's production model). Disabled by
   #      default even when a key is present: costs real money. Flip to
   #      enabled: true deliberately. Its list price still anchors cost tables.
+  #      NOTE: gpt-4o-mini no longer appears on OpenAI's current pricing page
+  #      (checked 2026-07-24); $0.15/$0.60 is its historical list price and the
+  #      row serves only as a cost anchor. The report states this caveat too.
   - key: openai/gpt-4o-mini
     provider: openai
-    model_id: gpt-4o-mini                   # VERIFY current id
+    model_id: gpt-4o-mini
     display_name: GPT-4o mini (reference)
     enabled: false
     rate_limit: { rpm: 60, rpd: 10000 }     # VERIFY (tier-dependent)
-    pricing: { input_per_mtok: 0.15, output_per_mtok: 0.60 }   # VERIFY
+    pricing: { input_per_mtok: 0.15, output_per_mtok: 0.60 }
     max_output_tokens: 1024
 
   # ---- Judge (different provider family from all candidates, by design) ----
-  - key: gemini/gemini-2.0-flash
+  # DECISION: judge is gemini-3.5-flash-lite, NOT a regular Flash model — on
+  # this account's Free tier ALL regular Flash models are capped at 20 RPD,
+  # which would stretch the judge phase past 50 days. Flash-Lite's 500 RPD is
+  # the only viable judge quota: ~1,030 judge calls => ~2-3 calendar days.
+  # Limits confirmed from AI Studio (aistudio.google.com/rate-limit), Free
+  # tier, 2026-07-24. Gemini TPM is 250K — a non-issue at our payload sizes.
+  - key: gemini/gemini-3.5-flash-lite
     provider: gemini
-    model_id: gemini-2.0-flash              # VERIFY current flash-class id
-    display_name: Gemini Flash (judge)
+    model_id: gemini-3.5-flash-lite         # VERIFY via discover_models.py once GEMINI_API_KEY is set
+    display_name: Gemini 3.5 Flash-Lite (judge)
     enabled: auto
-    rate_limit: { rpm: 15, rpd: 1500 }      # VERIFY free-tier judge quota — drives judge-day math
-    pricing: { input_per_mtok: 0.10, output_per_mtok: 0.40 }   # VERIFY
+    rate_limit: { rpm: 15, rpd: 500 }
+    pricing: { input_per_mtok: 0.30, output_per_mtok: 2.50 }
     max_output_tokens: 1024
     notes: judge only, never a candidate
+
+  # Quota-emergency judge fallback: gemma-4-26b via the Gemini API runs at
+  # 30 RPM / 14400 RPD on this account and is free of charge (no paid tier).
+  # Kept commented out: same-family-as-judge rules don't apply (it's a
+  # candidate-free family here), but a Gemma judge is weaker — use only if
+  # the Flash-Lite quota collapses mid-run.
+  # - key: gemini/gemma-4-26b
+  #   provider: gemini
+  #   model_id: gemma-4-26b                 # VERIFY exact id via discover_models.py
+  #   display_name: Gemma 4 26B (quota-emergency judge fallback)
+  #   enabled: false
+  #   rate_limit: { rpm: 30, rpd: 14400 }
+  #   pricing: { input_per_mtok: 0.0, output_per_mtok: 0.0 }
+  #   max_output_tokens: 1024
+  #   notes: judge only, never a candidate

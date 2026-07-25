@@ -15,9 +15,9 @@ cefr:
   seed: 42
 
 judge:
-  model_key: gemini/gemini-2.0-flash
+  model_key: gemini/gemini-3.5-flash-lite
   temperature: 0.0
-  n_items_per_language: 50      # 50 x 5 langs x ~6 models ~= 1,500 judge calls
+  n_items_per_language: 50      # 50 x 5 langs x 4 Groq models ~= 1,030 judge calls incl. calibration
   calibration_items: 30
   calibration_language: en
 

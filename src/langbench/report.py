@@ -224,6 +224,9 @@ def render_markdown(reports: list[ModelReport], results: ResultsDB) -> str:
         f"Judge rubric: {clarity_note}.",
         "Latency was measured on FREE tiers; paid-tier latency will differ.",
         "Cost = measured tokens x list prices, as $ per 1,000 learner messages.",
+        "gpt-4o-mini's price is its historical list price ($0.15/$0.60 per 1M):",
+        "OpenAI's current pricing page no longer lists the model, so it serves",
+        "only as a cost anchor, not a live offer.",
         "",
         "| Model | GEC GLEU | QWK (6-lvl) | QWK (en bands) | Judge (1-5) "
         "| Format OK | p50 ms | $/1K msgs |",
