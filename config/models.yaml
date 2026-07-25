@@ -1,0 +1,92 @@
+# Model registry. EVERY model id, rate limit, and price below is a best-known
+# placeholder marked VERIFY. Run scripts/discover_models.py to regenerate ids
+# from live provider endpoints, then fill real limits from provider dashboards.
+#
+# Rate limits are PER (provider, model). Groq in particular sets much lower
+# daily quotas on large models than small ones; do not copy limits across rows.
+#
+# pricing = paid list price of the same model (USD per 1M tokens). Free-tier
+# runs cost $0; the report uses these list prices for the $/1K-messages
+# projection so numbers survive a move to paid tiers. 0.0 = no public list
+# price exists.
+
+models:
+  # ---- Groq candidates ----
+  - key: groq/llama-3.1-8b-instant
+    provider: groq
+    model_id: llama-3.1-8b-instant          # VERIFY current id
+    display_name: Llama 3.1 8B (Groq)
+    enabled: auto
+    rate_limit: { rpm: 30, rpd: 14400 }     # VERIFY per-model limits
+    pricing: { input_per_mtok: 0.05, output_per_mtok: 0.08 }   # VERIFY
+    max_output_tokens: 1024
+
+  - key: groq/llama-3.3-70b-versatile
+    provider: groq
+    model_id: llama-3.3-70b-versatile       # VERIFY current id
+    display_name: Llama 3.3 70B (Groq)
+    enabled: auto
+    rate_limit: { rpm: 30, rpd: 1000 }      # VERIFY: 70B daily quota is far below 8B's
+    pricing: { input_per_mtok: 0.59, output_per_mtok: 0.79 }   # VERIFY
+    max_output_tokens: 1024
+
+  - key: groq/gemma2-9b-it
+    provider: groq
+    model_id: gemma2-9b-it                  # VERIFY current id (may be retired)
+    display_name: Gemma 2 9B (Groq)
+    enabled: auto
+    rate_limit: { rpm: 30, rpd: 14400 }     # VERIFY
+    pricing: { input_per_mtok: 0.20, output_per_mtok: 0.20 }   # VERIFY
+    max_output_tokens: 1024
+
+  # ---- OpenRouter free-tier candidates (only used if OPENROUTER_API_KEY set) ----
+  - key: openrouter/llama-3.1-8b-free
+    provider: openrouter
+    model_id: meta-llama/llama-3.1-8b-instruct:free   # VERIFY current free slug
+    display_name: Llama 3.1 8B (OpenRouter free)
+    enabled: auto
+    rate_limit: { rpm: 15, rpd: 200 }       # VERIFY: OpenRouter free daily cap is small
+    pricing: { input_per_mtok: 0.0, output_per_mtok: 0.0 }
+    max_output_tokens: 1024
+
+  - key: openrouter/qwen-2.5-7b-free
+    provider: openrouter
+    model_id: qwen/qwen-2.5-7b-instruct:free          # VERIFY current free slug
+    display_name: Qwen 2.5 7B (OpenRouter free)
+    enabled: auto
+    rate_limit: { rpm: 15, rpd: 200 }       # VERIFY
+    pricing: { input_per_mtok: 0.0, output_per_mtok: 0.0 }
+    max_output_tokens: 1024
+
+  # ---- Mistral La Plateforme free tier ----
+  - key: mistral/mistral-small
+    provider: mistral
+    model_id: mistral-small-latest          # VERIFY current id
+    display_name: Mistral Small
+    enabled: auto
+    rate_limit: { rpm: 30, rpd: 5000 }      # VERIFY: Mistral free tier is token-budgeted too
+    pricing: { input_per_mtok: 0.10, output_per_mtok: 0.30 }   # VERIFY
+    max_output_tokens: 1024
+
+  # ---- OpenAI reference point (Pangea's production model). Disabled by
+  #      default even when a key is present: costs real money. Flip to
+  #      enabled: true deliberately. Its list price still anchors cost tables.
+  - key: openai/gpt-4o-mini
+    provider: openai
+    model_id: gpt-4o-mini                   # VERIFY current id
+    display_name: GPT-4o mini (reference)
+    enabled: false
+    rate_limit: { rpm: 60, rpd: 10000 }     # VERIFY (tier-dependent)
+    pricing: { input_per_mtok: 0.15, output_per_mtok: 0.60 }   # VERIFY
+    max_output_tokens: 1024
+
+  # ---- Judge (different provider family from all candidates, by design) ----
+  - key: gemini/gemini-2.0-flash
+    provider: gemini
+    model_id: gemini-2.0-flash              # VERIFY current flash-class id
+    display_name: Gemini Flash (judge)
+    enabled: auto
+    rate_limit: { rpm: 15, rpd: 1500 }      # VERIFY free-tier judge quota — drives judge-day math
+    pricing: { input_per_mtok: 0.10, output_per_mtok: 0.40 }   # VERIFY
+    max_output_tokens: 1024
+    notes: judge only, never a candidate

@@ -1,0 +1,27 @@
+# Evaluation settings. Every sample size is a config value on purpose:
+# shrink these for a first pass if daily quotas bite harder than projected.
+#
+# Languages: en (W&I+LOCNESS), de/it/cs (MERLIN), es (COWS-L2H, GEC-only —
+# COWS-L2H has course levels, not CEFR labels; see DATA_LICENSES.md).
+
+languages: [en, de, it, cs, es]
+
+gec:
+  n_auto_per_language: 200
+  seed: 42
+
+cefr:
+  n_auto_per_language: 200
+  seed: 42
+
+judge:
+  model_key: gemini/gemini-2.0-flash
+  temperature: 0.0
+  n_items_per_language: 50      # 50 x 5 langs x ~6 models ~= 1,500 judge calls
+  calibration_items: 30
+  calibration_language: en
+
+prompt_versions:
+  gec: v1
+  cefr: v1
+  feedback: v1

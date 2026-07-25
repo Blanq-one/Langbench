@@ -1,0 +1,202 @@
+# HANDOFF TO CLAUDE CODE
+
+Work order for live verification and fix-up of the one-shot build. Written by
+the build itself; nothing in this repo has touched a live API or a real
+corpus file yet. Two mid-build review fixes are already applied (Gemini key
+moved out of URLs into the `x-goog-api-key` header; bot disk cache removed
+for privacy) — do not re-introduce either.
+
+**First command, before anything live:**
+
+```bash
+uv sync && ruff check . && mypy . && pytest
+```
+
+The suite is designed to pass fully offline with zero keys. If ruff or
+mypy-strict flag stragglers, fix them first — the build could not execute
+these tools, only design for them. Likely mypy-strict nits: the
+`# type: ignore` assignments injecting fake adapters in
+tests/test_runner_smoke.py (tests are outside mypy's files anyway), Any
+leakage around `matplotlib`/`nio` (overrides exist in pyproject), and the
+`_qwk_stat` closure typing in report.py.
+
+---
+
+## A. Every `# VERIFY` item, grouped, with the verification step
+
+### A1. Provider endpoints and wire formats
+| Where | What | How to verify |
+|---|---|---|
+| config/providers.yaml (all 5 base_url) | base URLs | one live smoke call per provider (see C4) |
+| src/langbench/providers/groq.py, mistral.py | OpenAI-compat shape incl. usage block | smoke call; inspect `usage.prompt_tokens/completion_tokens` |
+| src/langbench/providers/gemini.py | `POST /models/{id}:generateContent`, `x-goog-api-key` header, `usageMetadata` field names | Gemini REST docs + smoke call. Key must NEVER move into the URL (leaks via httpx exception reprs) |
+| src/langbench/providers/openrouter.py:20 | HTTP-Referer / X-Title attribution headers + real repo URL | OpenRouter docs |
+| scripts/discover_models.py:47 | Gemini `GET /models` response shape | run the script with a key |
+
+### A2. Model registry (config/models.yaml — every row)
+- Run `uv run python scripts/discover_models.py`, diff printed ids against
+  models.yaml, fix drifted ids (gemma2-9b-it is the most likely retirement;
+  OpenRouter `:free` slugs churn constantly).
+- Fill REAL per-(provider, model) RPM/RPD from each provider dashboard/docs.
+  Do not copy limits across rows — the Groq 70B-vs-8B daily gap is the whole
+  reason limits are per model. The Gemini judge RPD drives the judge-day
+  math in the estimator; get it right.
+- Fill list prices (USD per 1M tokens) from provider pricing pages,
+  including gpt-4o-mini (it anchors the cost axis even while disabled).
+
+### A3. Datasets (highest-risk area of the whole build)
+- scripts/prepare_data.py: all three dataset URLs and the W&I M2 filenames.
+- src/langbench/data/parsers.py — ALL parsers were written against
+  documented formats, sight unseen. Expected fix-ups:
+  - **MERLIN**: section headers ("Overall CEFR rating:", "Learner text:",
+    "Target hypothesis 1:") and directory layout are guesses at the
+    plain-text export; the real CLARIN distribution may be XML — if so,
+    rewrite parse_merlin_* accordingly and mirror the change in
+    tests/fixtures/merlin_de.txt + tests/test_parsers_data.py.
+  - **COWS-L2H**: original/ vs corrected/ sibling-directory layout and
+    whether corrected2/ exists; check the repo's actual tree.
+  - **W&I M2**: lowest risk (M2 is a stable standard), but confirm the
+    band-in-filename convention and the dev-file name.
+  - Parsers fail loudly with expected-structure messages by design; when one
+    fires, fix parser AND fixture together so the tests keep pinning reality.
+- DATA_LICENSES.md: URLs, license terms/versions. Confirm W&I terms permit
+  this use; MERLIN CC BY-SA version; COWS-L2H repo license file.
+
+### A4. Metrics
+- src/langbench/metrics/gleu.py: sanity-check ~10 scores against the
+  reference implementation (github.com/cnap/gec-ranking) on English items.
+  The source-ngram penalty and multi-reference mean are the places to watch.
+- src/langbench/metrics/errant_wrapper.py: `uv sync --extra errant`,
+  `python -m spacy download en_core_web_sm`, confirm `errant.load("en")` and
+  the annotate/parse API against the installed version.
+
+### A5. Bot
+- bot/polyglotbot/main.py: matrix-nio AsyncClient callback signature,
+  RoomMessageText fields (`server_timestamp`, `event_id`), and the
+  `m.relates_to` thread payload shape against the installed nio version.
+  Test in a scratch unencrypted room before publicizing.
+- bot/DEPLOY.md: Oracle Always Free shape names.
+
+### A6. Tooling
+- .github/workflows/ci.yaml: astral-sh/setup-uv action major version.
+- pyproject pins (httpx, pydantic, matrix-nio, errant ranges) against
+  current releases at `uv sync` time.
+
+## B. Every `# DECISION`, one-line rationale each
+
+1. Parsers live in src/langbench/data/parsers.py, not inside
+   prepare_data.py — importable means unit-testable.
+2. Sync sqlite + asyncio.to_thread over aiosqlite — one fewer dep, same
+   semantics at this call volume.
+3. Rate limiter is stateless across restarts; --resume reseeds daily usage
+   from the results DB via count_today, which can only overcount (cache hits
+   also create records) — conservative by construction.
+4. preload_daily_usage takes max(current, seeded) — reseeding must never
+   lower known usage (a mid-build review fix; regression-tested in
+   tests/test_ratelimit.py and the quota-parking smoke test).
+5. Results DB enforces a per-task field allowlist + closed string sets —
+   corpus text physically cannot enter the committed artifact.
+6. gold_label is stored in the results DB — QWK needs (pred, gold) and gold
+   CEFR labels are closed-set values, not corpus text.
+7. W&I ABCN dev file carries no per-sentence band, so English CEFR uses the
+   banded train files; dev feeds GEC.
+8. COWS-L2H course levels are not CEFR; Spanish is GEC-only (a mapping was
+   rejected as indefensible without external calibration).
+9. CLC-FCE deferred: registration-gated, spec said "if easily obtainable".
+10. UNPARSEABLE CEFR predictions score maximally wrong on ordinal metrics —
+    format failures can never help a model.
+11. GLEU multi-reference: mean over references (equivalent in expectation to
+    Napoles's per-iteration reference sampling at 1-2 refs).
+12. Metrics hand-rolled (QWK, macro-F1, Spearman, GLEU) — no
+    scikit-learn/scipy/nltk in the dependency tree.
+13. Judge dimension order is seeded per sample_id: randomized across items
+    (position-bias control), deterministic per item (cache-stable).
+14. Judge calibration mode lives in run_eval.py (--calibrate-judge), not a
+    separate script; it uses ONE candidate's outputs so judge agreement is
+    not confounded with candidate quality.
+15. Spurious-edit proxy for calibration: corrected text contains tokens
+    absent from both source and every gold.
+16. Runner concurrency: models parallel, items sequential per model — at
+    15-30 RPM, intra-model parallelism buys nothing.
+17. Provider errors leave items PENDING (infra's fault, retried next run);
+    persistent parse failures are SCORED failures (model's fault).
+18. Candidate format failure on the feedback task records floor rubric
+    scores (all 1s) with format_ok=0.
+19. Cache hits reuse the original live latency measurement.
+20. There is deliberately no --no-resume: re-spending free quota by accident
+    is the worst failure mode; redo an item by deleting its results-DB row.
+21. Cost basis: feedback-task tokens (closest to bot traffic), GEC fallback.
+22. Composite quality: mean of available rescaled components (GLEU; clipped
+    QWK, six-level preferred; judge (x-1)/4) — formula printed in REPORT.md.
+23. Bot-config winner: best composite among models >= 95% format
+    reliability; ties to the cheaper model.
+24. Bot behavior knobs come from env vars; the generated bot/config.yaml
+    stays purely the eval output.
+25. Bot "other bots" heuristic: localpart contains "bot", plus always skip
+    self.
+26. Bot stays silent on infra errors and on correct messages; only rate
+    limiting gets an in-room reply; failed attempts don't consume the
+    cooldown; feedback capped at 5 items; replies are m.notice.
+27. **Bot has ZERO disk persistence** (deviates from spec §5 "reuse cache"):
+    the raw cache stores full responses quoting learner messages, which
+    would falsify the !help privacy note; live messages don't repeat so the
+    cache saved nothing. systemd ProtectSystem=strict now enforces this at
+    the OS level. (Mid-build review decision.)
+28. English is band-granular and never pooled with six-level QWK; the report
+    carries two separate QWK columns.
+
+## C. Live-integration checklist, in order
+
+1. `uv sync && ruff check . && mypy . && pytest` — all green offline first.
+2. `cp .env.example .env`, add GROQ_API_KEY + GEMINI_API_KEY (minimum).
+3. `uv run python scripts/discover_models.py` — reconcile models.yaml ids;
+   fill real rate limits and prices (A2).
+4. One live smoke call per enabled provider (a 3-line script or
+   `run_eval.py --models <one> --langs en` against a 1-item manifest);
+   confirm response parsing and usage fields per adapter (A1).
+5. Download corpora per `prepare_data.py` instructions; run it per dataset;
+   fix parsers against real formats (A3 — budget the most time here);
+   `--manifests` last.
+6. Tiny live eval: `run_eval.py --langs en --models groq/llama-3.1-8b-instant
+   <one-more>` with n_auto temporarily set to 5 in eval.yaml. Inspect the
+   results DB rows by hand.
+7. Restore sample sizes; `run_eval.py --dry-run`; sanity-check the quota
+   estimate against the real limits you filled in.
+8. Full candidates phase daily with defaults until pending hits zero.
+9. `run_eval.py --phase judge` daily (this is the long pole: ~1,500 judge
+   calls vs the Gemini daily cap).
+10. `run_eval.py --calibrate-judge`; optionally hand-label ~30 clarity items
+    into data/calibration/clarity_labels.jsonl and rerun.
+11. `build_report.py` — read REPORT.md skeptically (CI overlaps, rewrite
+    flags, cost sanity). Then `--emit-bot-config`.
+12. Bot: scratch Matrix account + unencrypted test room; run locally first
+    (`uv sync --extra bot`, PYTHONPATH=bot, `python -m polyglotbot.main`);
+    verify threads render, cooldown works, !level answers; then deploy per
+    bot/DEPLOY.md.
+13. Enable GitHub Pages on /docs for the leaderboard.
+
+## D. Honest low-confidence list (weakest code first)
+
+1. **Dataset parsers** (data/parsers.py) — written blind; MERLIN most likely
+   to be structurally wrong (possibly XML, not the assumed plain text).
+2. **Provider response schemas** — the OpenAI-compat assumption is solid for
+   Groq/OpenRouter/Mistral but usage-field names and error bodies vary;
+   Gemini's shape was written from memory.
+3. **GLEU implementation** — the formula is from the papers, not diffed
+   against the reference implementation; the smoothing choice (1e-9 log
+   floor for zero precisions) is defensible but unvalidated.
+4. **matrix-nio integration** (bot/polyglotbot/main.py) — API written from
+   memory; the thread-relation dict and the server_timestamp backlog guard
+   need a live room to confirm.
+5. **Rate-limit placeholder numbers** — every RPM/RPD is invented; the
+   estimator's calendar-day math is only as good as those rows.
+6. **ERRANT wrapper** — guarded and optional, but the annotate/parse call
+   pattern may not match the current errant release.
+7. **discover_models.py Gemini listing** — endpoint shape unverified.
+8. **mypy-strict cleanliness** — designed for, never executed; expect a
+   short fix pass.
+
+End of handoff. The build's contract was: structurally complete, internally
+consistent (automated import-graph + payload-allowlist + config-reference
+sweep passed), offline-test-designed, honestly annotated. Everything live is
+yours.

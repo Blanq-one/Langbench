@@ -1,0 +1,11 @@
+Author ID: fixture-001
+Test level: fixture
+Overall CEFR rating: B1
+
+Learner text:
+Ich habe gestern in die Schule gegangen und viel gelernt.
+Es war ein schön Tag.
+
+Target hypothesis 1:
+Ich bin gestern in die Schule gegangen und habe viel gelernt.
+Es war ein schöner Tag.

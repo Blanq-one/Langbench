@@ -1,0 +1,27 @@
+# CI: lint + typecheck + the fully-offline test suite (which includes the
+# 5-item smoke eval from committed fixtures — see tests/test_runner_smoke.py).
+# NO api keys exist in this environment, by design: any test needing one is a
+# bug.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5    # VERIFY current action major version
+        with:
+          python-version: "3.12"
+      - name: Install (core + dev; no extras — tests must not need them)
+        run: uv sync
+      - name: Lint
+        run: uv run ruff check .
+      - name: Typecheck
+        run: uv run mypy .
+      - name: Tests (offline, includes smoke eval)
+        run: uv run pytest -q

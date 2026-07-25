@@ -1,0 +1,13 @@
+# Run from the repo root: docker compose -f bot/docker-compose.yml up -d
+services:
+  polyglotbot:
+    build:
+      context: ..
+      dockerfile: bot/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    ports:
+      - "9100:9100"   # Prometheus /metrics
+    # No volumes on purpose: the bot keeps nothing on disk (privacy promise
+    # in !help). Room state and the !level window are in-memory only.

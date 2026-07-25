@@ -1,0 +1,60 @@
+[project]
+name = "langbench"
+version = "0.1.0"
+description = "Reproducible eval harness benchmarking free-tier LLMs on multilingual GEC and CEFR classification, plus a Matrix feedback bot deploying the winner."
+authors = [{ name = "Krish Nagaral", email = "nagaralkrish@gmail.com" }]
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.27,<0.28",
+    "pydantic>=2.7,<3",
+    "pyyaml>=6.0,<7",
+    "numpy>=1.26,<3",
+    "matplotlib>=3.8,<4",
+    "python-dotenv>=1.0,<2",
+]
+
+[project.optional-dependencies]
+# ERRANT is English-only and drags in spaCy; keep it out of the core install.
+errant = ["errant>=3.0,<4"]  # VERIFY: current errant version + spaCy model install step
+bot = [
+    "matrix-nio>=0.24,<1",   # VERIFY: current matrix-nio version
+    "prometheus-client>=0.20,<1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.2,<9",
+    "pytest-asyncio>=0.23,<1",
+    "ruff>=0.5,<1",
+    "mypy>=1.10,<2",
+    "types-PyYAML",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/langbench"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src", "scripts", "bot/polyglotbot"]
+# matrix-nio and errant ship no type stubs.
+[[tool.mypy.overrides]]
+module = ["nio.*", "errant.*", "matplotlib.*", "prometheus_client.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests", "bot/tests"]

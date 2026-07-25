@@ -1,0 +1,31 @@
+# Secrets
+.env
+
+# Raw response cache: contains corpus text and full API responses. NEVER commit.
+data/cache/
+*.rawcache.sqlite
+
+# Downloaded corpora: licensed, not redistributable. NEVER commit.
+data/corpora/
+data/prepared/
+
+# NOTE: data/results/results.sqlite (derived scores only, no corpus text) IS
+# committed on purpose. Do not add it here.
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+dist/
+build/
+*.egg-info/
+
+# Reports are rebuilt from the results DB; charts are binary churn.
+reports/*.png
+
+# Bot runtime state
+bot/store/
+bot/*.log

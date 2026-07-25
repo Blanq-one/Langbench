@@ -1,0 +1,28 @@
+# Example systemd unit for PolyglotBot without Docker.
+# Install: sudo cp bot/polyglotbot.service /etc/systemd/system/ && \
+#          sudo systemctl daemon-reload && sudo systemctl enable --now polyglotbot
+# Adjust User= and the /opt/langbench paths to your box.
+
+[Unit]
+Description=PolyglotBot (Matrix language feedback bot)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=polyglot
+WorkingDirectory=/opt/langbench
+EnvironmentFile=/opt/langbench/.env
+Environment=PYTHONPATH=/opt/langbench/bot
+ExecStart=/opt/langbench/.venv/bin/python -m polyglotbot.main
+Restart=on-failure
+RestartSec=10
+
+# Hardening. No ReadWritePaths on purpose: the bot stores nothing on disk,
+# and ProtectSystem=strict now enforces that promise at the OS level.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
