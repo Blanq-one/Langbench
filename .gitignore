@@ -12,6 +12,10 @@ data/prepared/
 # NOTE: data/results/results.sqlite (derived scores only, no corpus text) IS
 # committed on purpose. Do not add it here.
 
+# Clarity labeling worksheet: quotes learner text (corpus text). NEVER commit.
+# The labels file (clarity_labels.jsonl, IDs + scores only) IS committable.
+data/calibration/clarity_worksheet.md
+
 # Python
 __pycache__/
 *.pyc
