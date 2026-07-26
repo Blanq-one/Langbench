@@ -200,9 +200,12 @@ class Runner:
             f"{judge.rate_limit.rpd}/day => ~{jdays:.1f} calendar day(s)",
             "",
             "Run with --resume (default) across days; completed items are never re-called.",
-            "Caveat: only RPM/RPD are modeled. Provider TPM (tokens/minute) caps are not;",
-            "on Groq the 8B model's 6K TPM can bind before its RPM does, so expect some",
-            "429 backoffs the day-count above does not predict.",
+            "Caveat: only RPM/RPD are modeled. Provider TOKEN budgets are not — neither",
+            "TPM (tokens/minute; Groq 8B's 6K binds before its RPM) nor TPD (tokens/DAY;",
+            "the binding constraint for token-heavy models — a 200K TPD budget made",
+            "qwen3.6-27b infeasible, DECISION 37). rpd values in models.yaml are set to",
+            "~0.8 x TPD/avg-request-tokens so models park cleanly instead of grinding",
+            "retries, but expect 429 backoffs the day-count above does not predict.",
         ]
         return "\n".join(lines)
 

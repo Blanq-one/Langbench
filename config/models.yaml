@@ -25,9 +25,13 @@ models:
     model_id: llama-3.1-8b-instant
     display_name: Llama 3.1 8B (Groq)
     enabled: auto
-    rate_limit: { rpm: 30, rpd: 14400 }
-    # Groq also caps this model at 6K TPM / 500K TPD; at our payload sizes the
-    # 6K TPM is likely the binding constraint, not the 30 RPM modeled here.
+    # DECISION (pacing, 2026-07-27): rpm/rpd derated from the dashboard's
+    # 30/14400 to fit OBSERVED token budgets (6K TPM, 500K TPD; avg request
+    # 462 tokens): rpm = 0.8*TPM/avg, rpd = 0.8*TPD/avg. Pacing is harness
+    # scheduling, not model behavior — the measured model is unchanged and
+    # rate limits are not part of cache keys. Converts retry-grinding into
+    # clean daily parking.
+    rate_limit: { rpm: 10, rpd: 800 }
     pricing: { input_per_mtok: 0.05, output_per_mtok: 0.08 }
     max_output_tokens: 1024
 
@@ -36,17 +40,30 @@ models:
     model_id: llama-3.3-70b-versatile
     display_name: Llama 3.3 70B (Groq)
     enabled: auto
-    rate_limit: { rpm: 30, rpd: 1000 }      # 70B daily quota is far below 8B's
+    # Derated from dashboard 30/1000 for token budgets (12K TPM, 100K TPD;
+    # MERLIN-adjusted avg request ~550 tokens). Same pacing DECISION as above.
+    rate_limit: { rpm: 17, rpd: 160 }
     pricing: { input_per_mtok: 0.59, output_per_mtok: 0.79 }
     max_output_tokens: 1024
 
   # gemma2-9b-it was retired from Groq (absent from the live /models listing
   # and the pricing page, 2026-07-24). Replaced by qwen3.6-27b below.
+  #
+  # DECISION 37 (2026-07-27): qwen3.6-27b DROPPED as a candidate — evaluated
+  # for feasibility, infeasible at free tier. With reasoning enabled (hidden,
+  # DECISION 32) it averaged 1,319 tokens/request on single-sentence English
+  # GEC (llama-8B: ~27 completion tokens) — hidden reasoning bills against
+  # Groq's 200K tokens/DAY budget, implying ~4 weeks for the full manifest.
+  # This falsifies DECISION 29's "fourth candidate is ~free in calendar time"
+  # premise: TPD was modeled neither by the transcribed dashboard table nor
+  # the estimator. Cached data and its ~37 English rows are retained; the
+  # report excludes them from the headline table and carries the finding as
+  # a named subsection.
   - key: groq/qwen3.6-27b
     provider: groq
     model_id: qwen/qwen3.6-27b
     display_name: Qwen 3.6 27B (Groq)
-    enabled: auto
+    enabled: false
     rate_limit: { rpm: 30, rpd: 1000 }
     pricing: { input_per_mtok: 0.60, output_per_mtok: 3.00 }
     # DECISION: reasoning models get 4096 — hidden reasoning consumes the
@@ -72,7 +89,10 @@ models:
     model_id: openai/gpt-oss-20b
     display_name: GPT-OSS 20B (Groq)
     enabled: auto
-    rate_limit: { rpm: 30, rpd: 1000 }
+    # rpd derated from dashboard 1000 for its 200K TPD (avg request ~594
+    # tokens, reasoning included). rpm stays 30: no TPM 429 ever observed
+    # for this model, so there is no honest basis to derate it.
+    rate_limit: { rpm: 30, rpd: 200 }
     pricing: { input_per_mtok: 0.075, output_per_mtok: 0.30 }
     max_output_tokens: 4096   # reasoning model: same DECISION as qwen3.6-27b above
 

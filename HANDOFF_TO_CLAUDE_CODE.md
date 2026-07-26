@@ -195,6 +195,21 @@ leakage around `matplotlib`/`nio` (overrides exist in pyproject), and the
     smoothing diverged by up to 0.19 on zero-match sentences — ranking-
     changing. "GLEU (Napoles et al.)" in the report means the reference
     implementation, full stop.
+37. (Live integration, 2026-07-27) qwen3.6-27b DROPPED as a candidate:
+    evaluated for feasibility, infeasible at free tier. Hidden reasoning
+    (DECISION 32) averaged 1,319 tokens/request on single-sentence English
+    GEC (llama-8B: ~27 completion tokens), billing against Groq's 200K
+    tokens/DAY budget => ~4 weeks for the full manifest. This FALSIFIES
+    DECISION 29's "fourth candidate is ~free in calendar time" premise: the
+    TPD limit class was modeled neither by the transcribed dashboard table
+    (A2) nor by the estimator (DECISION 31 covered TPM only). Cached data
+    and partial English rows retained; excluded from the headline table
+    (paired comparisons need full coverage); finding reported as a named
+    subsection. Remaining models' rpm/rpd derated to observed token budgets
+    (0.8 x budget / avg request tokens): llama-8B 10/800, 70B 17/160,
+    gpt-oss 30/200 (no TPM 429 ever observed for gpt-oss, so its rpm is not
+    derated on invented numbers). Pacing is harness scheduling, not model
+    behavior; rate limits are not in cache keys.
 
 ## C. Live-integration checklist, in order
 

@@ -77,9 +77,16 @@ def aggregate(results: ResultsDB, reg: Registry) -> list[ModelReport]:
         if not recs:
             continue
         try:
-            display = reg.model(mk).display_name
+            m = reg.model(mk)
         except KeyError:
             display = mk  # model since removed from registry: still report it
+        else:
+            if m.enabled is False:
+                # Explicitly disabled row (qwen3.6-27b, DECISION 37): partial
+                # coverage breaks paired comparisons, so its rows stay out of
+                # the headline table; the finding gets its own report section.
+                continue
+            display = m.display_name
 
         gec = [r for r in recs if r["task"] == "gec"]
         gleu_vals = [float(r["payload"]["gleu"]) for r in gec]
@@ -254,6 +261,23 @@ def render_markdown(reports: list[ModelReport], results: ResultsDB) -> str:
     lines += ["", "## Pairwise deltas vs the top model (paired bootstrap, GEC GLEU)", ""]
     lines += _delta_lines(reports, results)
     lines += ["", "## Recommendation", ""] + _recommendation_lines(reports)
+    lines += [
+        "",
+        "## Feasibility finding: qwen3.6-27b (evaluated, dropped — DECISION 37)",
+        "",
+        "Qwen 3.6 27B was enrolled as the fourth candidate and dropped after",
+        "live feasibility measurement: with reasoning enabled (hidden via",
+        "reasoning_format, DECISION 32), it averaged 1,319 tokens/request on",
+        "single-sentence English GEC (llama-8B: ~27 completion tokens on the",
+        "same items) — hidden reasoning tokens bill against Groq's free-tier",
+        "200,000 tokens/day budget, implying ~4 weeks for the full manifest.",
+        "Its partial English rows are excluded from the table above",
+        "(incomplete coverage breaks the paired bootstrap). The general",
+        "lesson: free-tier feasibility for reasoning models is set by",
+        "tokens-per-DAY budgets that provider dashboards list separately",
+        "from request-per-day limits, and reasoning multiplies token draw",
+        "~50x on short tasks.",
+    ]
     lines += [
         "",
         "## Caveats (stated once)",
