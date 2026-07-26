@@ -210,6 +210,12 @@ leakage around `matplotlib`/`nio` (overrides exist in pyproject), and the
     gpt-oss 30/200 (no TPM 429 ever observed for gpt-oss, so its rpm is not
     derated on invented numbers). Pacing is harness scheduling, not model
     behavior; rate limits are not in cache keys.
+38. (Live integration, 2026-07-26) The 0.8 safety factor on rpd is dropped
+    (70B 160->200, gpt-oss 200->250; llama's 800 kept, it finishes
+    regardless): the failure mode it protected against is now cheap —
+    end-of-day TPD 429s burn a few bounded retries and items go PENDING
+    into tomorrow's pass (minutes of churn) — while the protection cost
+    ~2 calendar days. PENDING-is-cheap changes the tradeoff.
 
 ## C. Live-integration checklist, in order
 

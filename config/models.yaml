@@ -42,7 +42,12 @@ models:
     enabled: auto
     # Derated from dashboard 30/1000 for token budgets (12K TPM, 100K TPD;
     # MERLIN-adjusted avg request ~550 tokens). Same pacing DECISION as above.
-    rate_limit: { rpm: 17, rpd: 160 }
+    # DECISION (2026-07-26): 0.8 safety factor dropped (rpd 160 -> 200): the
+    # failure mode it protected against is now cheap — end-of-day TPD 429s
+    # burn a few bounded retries and items go PENDING into tomorrow's pass —
+    # while the protection cost ~2 calendar days. PENDING-is-cheap changes
+    # the tradeoff.
+    rate_limit: { rpm: 17, rpd: 200 }
     pricing: { input_per_mtok: 0.59, output_per_mtok: 0.79 }
     max_output_tokens: 1024
 
@@ -92,7 +97,9 @@ models:
     # rpd derated from dashboard 1000 for its 200K TPD (avg request ~594
     # tokens, reasoning included). rpm stays 30: no TPM 429 ever observed
     # for this model, so there is no honest basis to derate it.
-    rate_limit: { rpm: 30, rpd: 200 }
+    # DECISION (2026-07-26): 0.8 safety factor dropped (rpd 200 -> 250);
+    # see the 70B row — PENDING-is-cheap changes the tradeoff.
+    rate_limit: { rpm: 30, rpd: 250 }
     pricing: { input_per_mtok: 0.075, output_per_mtok: 0.30 }
     max_output_tokens: 4096   # reasoning model: same DECISION as qwen3.6-27b above
 
