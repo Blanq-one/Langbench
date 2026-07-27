@@ -53,6 +53,10 @@ class ModelReport:
     cost_per_1k_messages: float | None  # None when no token/price data
     composite: float
     rewrite_flag_rate: float  # share of GEC items flagged as near-total rewrites
+    # lang -> (format_ok, n, gec_format_ok, gec_n). The pooled column feeds the
+    # winner gate; this exists because pooling can mask per-language gradients
+    # (llama-8B: en 99.5% -> es ~73% on GEC) that matter to a bot operator.
+    format_by_lang: dict[str, tuple[int, int, int, int]]
 
 
 def _qwk_stat(scale: list[str]) -> object:
@@ -120,6 +124,14 @@ def aggregate(results: ResultsDB, reg: Registry) -> list[ModelReport]:
             float(r["latency_ms"]) for r in recs if r["latency_ms"] is not None
         )
         fmt_ok = sum(bool(r["format_ok"]) for r in recs)
+        by_lang: dict[str, list[int]] = {}
+        for r in recs:
+            cell = by_lang.setdefault(str(r["lang"]), [0, 0, 0, 0])
+            cell[0] += bool(r["format_ok"])
+            cell[1] += 1
+            if r["task"] == "gec":
+                cell[2] += bool(r["format_ok"])
+                cell[3] += 1
 
         gleu_ci = ci_mean(gleu_vals, seed=1)
         qwk_six = (
@@ -150,6 +162,7 @@ def aggregate(results: ResultsDB, reg: Registry) -> list[ModelReport]:
                 cost_per_1k_messages=cost,
                 composite=composite,
                 rewrite_flag_rate=(sum(rewrites) / len(rewrites)) if rewrites else 0.0,
+                format_by_lang={k: (v[0], v[1], v[2], v[3]) for k, v in by_lang.items()},
             )
         )
     reports.sort(key=lambda r: r.composite, reverse=True)
@@ -258,6 +271,8 @@ def render_markdown(reports: list[ModelReport], results: ResultsDB) -> str:
             f"| {r.p50_latency_ms:.0f} "
             f"| {cost} |"
         )
+    lines += ["", "## Format reliability by language", ""]
+    lines += _format_by_lang_lines(reports)
     lines += ["", "## Pairwise deltas vs the top model (paired bootstrap, GEC GLEU)", ""]
     lines += _delta_lines(reports, results)
     lines += ["", "## Recommendation", ""] + _recommendation_lines(reports)
@@ -296,6 +311,40 @@ def render_markdown(reports: list[ModelReport], results: ResultsDB) -> str:
         if r.rewrite_flag_rate > 0.10:
             lines.append(f"  - {r.display_name}: {r.rewrite_flag_rate:.0%} of GEC items flagged")
     return "\n".join(lines) + "\n"
+
+
+# Eval-set order (western-to-eastern of the corpora, matches eval.yaml); any
+# unexpected language sorts after these rather than crashing the report.
+_LANG_ORDER = ["en", "de", "it", "cs", "es"]
+
+
+def _format_by_lang_lines(reports: list[ModelReport]) -> list[str]:
+    langs = {lang for r in reports for lang in r.format_by_lang}
+    ordered = [x for x in _LANG_ORDER if x in langs] + sorted(langs - set(_LANG_ORDER))
+    if not ordered:
+        return ["(no records)"]
+    lines = [
+        "The pooled Format OK column above feeds the winner gate; this table",
+        "shows the per-language spread that pooling can mask. Cells are",
+        "all-task rates with GEC-only rates in parentheses (GEC drives the",
+        "gradients observed so far).",
+        "",
+        "| Model | " + " | ".join(ordered) + " |",
+        "|---|" + "---|" * len(ordered),
+    ]
+    for r in reports:
+        cells = []
+        for lang in ordered:
+            ok, n, gec_ok, gec_n = r.format_by_lang.get(lang, (0, 0, 0, 0))
+            if n == 0:
+                cells.append("n/a")
+            else:
+                cell = f"{ok / n:.1%}"
+                if gec_n:
+                    cell += f" (gec {gec_ok / gec_n:.1%})"
+                cells.append(cell)
+        lines.append(f"| {r.display_name} | " + " | ".join(cells) + " |")
+    return lines
 
 
 def _delta_lines(reports: list[ModelReport], results: ResultsDB) -> list[str]:
