@@ -28,7 +28,12 @@ Everything it does is what the manual daily resume did, mechanized:
 4. CANDIDATES: run scripts/run_eval.py (resume semantics built in; crashed
    or parked models leave PENDING items for tomorrow, DECISIONs 17/41).
 
-Logs: logs/automation/YYYY-MM-DD.log (repo-relative, gitignored).
+Logs: logs/automation/YYYY-MM-DD_HHMMSS.log — one file PER INVOCATION,
+never shared: concurrent instances are legal (a judge stage may overlap a
+still-running guarded pass), and Windows append handles inherited by long
+-lived child processes write at stale offsets, silently clobbering other
+writers of the same file (observed 2026-07-29: a test fire's entire judge
+stage vanished from the shared day log). Review globs the day's files.
 Exit code 0 = ran to plan (including "nothing to do"); 1 = candidates
 skipped by the guard (judge stage still ran); 2 = candidates subprocess
 failed; 3 = judging stopped on the Gemini stop-rule (candidates still ran).
@@ -181,7 +186,7 @@ def run_judge_stage(log: Path) -> bool:
 
 def main() -> int:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
-    log = LOG_DIR / f"{dt.date.today():%Y-%m-%d}.log"
+    log = LOG_DIR / f"{dt.datetime.now():%Y-%m-%d_%H%M%S}.log"
 
     # Judge FIRST (DECISION 43): fires the Gemini probe at schedule time and
     # cannot be starved by a TPD-ground candidates run that never exits. Not
