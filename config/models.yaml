@@ -102,6 +102,23 @@ models:
     rate_limit: { rpm: 30, rpd: 250 }
     pricing: { input_per_mtok: 0.075, output_per_mtok: 0.30 }
     max_output_tokens: 4096   # reasoning model: same DECISION as qwen3.6-27b above
+    # DECISION 39 (2026-07-29): reduced-coverage keep — en+de ONLY. Groq's TPD
+    # meter charges ACTUAL tokens (verified 2026-07-27: trailing-24h sums of
+    # requested tokens over admitted calls EXCEEDED the limits, impossible
+    # under requested-charging; Used tracked actual sums within ~13%). Hidden
+    # reasoning scales with item difficulty: measured ~463 actual tokens/GEC
+    # item (en) -> ~3,200 (de), projecting ~3,400 (cs) / ~4,300 (es) — at or
+    # beyond any sane output budget. Full coverage ≈ 4.5M tokens ≈ ~22 days
+    # and would mass-produce output-ceiling artifacts (the DECISION 37
+    # failure mode); en+de finishes inside 70B's ~7-day tail. Disclosed as a
+    # named coverage note in REPORT.md.
+    langs: [en, de]
+    # DECISION 40 (2026-07-29): GEC budget 8192 — 14 of 15 de GEC format
+    # failures were 4096-ceiling artifacts (finish_reason=length), OUR fault,
+    # deleted and regenerated under this budget. feedback stays 4096: its
+    # gens are cached and max_tokens is in the cache key, so changing it
+    # would orphan them.
+    max_output_tokens_per_task: { gec: 8192 }
 
   # ---- OpenRouter free-tier candidates (only used if OPENROUTER_API_KEY set) ----
   - key: openrouter/llama-3.1-8b-free

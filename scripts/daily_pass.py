@@ -1,0 +1,185 @@
+#!/usr/bin/env python3
+"""Unattended daily pass (Part 3): candidates, then coverage-gated judging.
+
+Designed to run from Windows Task Scheduler via scripts/daily_pass.cmd.
+Everything it does is what the manual daily resume did, mechanized:
+
+1. GUARD: if a run_eval.py process is already alive, exit — never run two
+   candidate passes at once (they double-hammer the shared rate buckets).
+2. CANDIDATES: run scripts/run_eval.py (resume semantics built in; crashed
+   or parked models leave PENDING items for tomorrow, DECISIONs 17/41).
+3. JUDGE, one batch per (model, lang), smallest pending first: a batch is
+   eligible only when EVERY pending feedback item has its candidate primary
+   call cached AND, if the primary is unparseable, its repair turn cached —
+   the one-call rule: the judge phase must never trigger a live candidate
+   generation. Smallest-first makes the first batch a cheap probe of the
+   judge quota.
+4. GEMINI STOP-RULE: if a batch log shows a Gemini quota 429, stop all
+   further judging immediately and leave a GEMINI-429-STOP marker in the
+   log for the human/Claude review (do not grind retries across batches).
+
+Logs: logs/automation/YYYY-MM-DD.log (repo-relative, gitignored).
+Exit code 0 = ran to plan (including "nothing to do"); 1 = guard skip;
+2 = candidates subprocess failed; 3 = stopped on the Gemini stop-rule.
+"""
+
+from __future__ import annotations
+
+import datetime as dt
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO / "src"))
+
+from dotenv import load_dotenv  # noqa: E402
+
+load_dotenv(REPO / ".env")
+
+import langbench.tasks.feedback as feedback_task  # noqa: E402
+from langbench.cache import RawCache, cache_key  # noqa: E402
+from langbench.config import ModelConfig, load_registry  # noqa: E402
+from langbench.data.schema import PREPARED_DIR, load_manifest_ids, read_jsonl  # noqa: E402
+from langbench.parsing import Failed, build_repair_request, parse  # noqa: E402
+from langbench.providers.base import ChatRequest  # noqa: E402
+from langbench.results import ResultsDB  # noqa: E402
+
+LOG_DIR = REPO / "logs" / "automation"
+# This script already runs inside the uv-managed venv (daily_pass.cmd enters
+# it via `python -m uv run`), so children reuse the same interpreter.
+RUN_EVAL = [sys.executable, "scripts/run_eval.py"]
+GEMINI_QUOTA_RE = re.compile(r"gemini.*HTTP 429|HTTP 429.*(quota|RATE_LIMIT|PerDay)",
+                             re.IGNORECASE)
+
+
+def log_line(log: Path, msg: str) -> None:
+    stamp = dt.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    line = f"[daily_pass {stamp}] {msg}"
+    print(line)
+    with log.open("a", encoding="utf-8") as f:
+        f.write(line + "\n")
+
+
+def another_pass_alive() -> bool:
+    out = subprocess.run(
+        ["powershell", "-NoProfile", "-Command",
+         "(Get-CimInstance Win32_Process | Where-Object { $_.CommandLine "
+         "-match 'run_eval\\.py' }).Count"],
+        capture_output=True, text=True, check=False,
+    ).stdout.strip()
+    return bool(out) and out != "0"
+
+
+def run_logged(args: list[str], log: Path) -> int:
+    """Run a subprocess appending combined output to the day log."""
+    with log.open("a", encoding="utf-8") as f:
+        proc = subprocess.run(
+            args, cwd=REPO, stdout=f, stderr=subprocess.STDOUT, check=False
+        )
+    return proc.returncode
+
+
+def feedback_batch_state(
+    cache: RawCache, results: ResultsDB, model: ModelConfig, lang: str, version: str
+) -> tuple[int, bool]:
+    """(pending_count, fully_cached) for one (model, lang) feedback batch."""
+    ids = load_manifest_ids(lang, "feedback")
+    if ids is None:
+        return 0, False
+    by_id = {s.id: s for s in read_jsonl(PREPARED_DIR / f"{lang}.jsonl")}
+    pending = 0
+    fully_cached = True
+    for i in ids:
+        if results.has("feedback", lang, model.key, version, i):
+            continue
+        pending += 1
+        req = feedback_task.build_request(
+            by_id[i].source_text, version, lang, model.output_budget("feedback")
+        )
+
+        def key_for(r: ChatRequest) -> str:
+            # Mirrors Runner._call's key construction exactly; drift here
+            # would silently break the one-call gate.
+            return cache_key(
+                provider=model.provider, model_id=model.model_id,
+                prompt_version=version,
+                params={"temperature": r.temperature, "max_tokens": r.max_tokens,
+                        "extra_body": model.extra_body},
+                input_text=f"{r.system or ''}\n\x00\n{r.user}",
+            )
+
+        cached = cache.get(key_for(req))
+        if cached is None:
+            fully_cached = False
+            continue
+        parsed = parse(cached["text"], feedback_task.Output)
+        if isinstance(parsed, Failed):
+            repair = build_repair_request(req, cached["text"], parsed.error)
+            if cache.get(key_for(repair)) is None:
+                fully_cached = False
+    return pending, fully_cached
+
+
+def main() -> int:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    log = LOG_DIR / f"{dt.date.today():%Y-%m-%d}.log"
+
+    if another_pass_alive():
+        log_line(log, "GUARD: run_eval.py already alive; skipping this fire")
+        return 1
+
+    log_line(log, "candidates pass starting")
+    rc = run_logged(RUN_EVAL, log)
+    if rc != 0:
+        log_line(log, f"candidates pass FAILED rc={rc} — judging skipped, "
+                      "items stay pending; review the log")
+        return 2
+    log_line(log, "candidates pass done")
+
+    reg = load_registry()
+    cache = RawCache()
+    results = ResultsDB()
+    version = reg.eval.prompt_versions["feedback"]
+    batches: list[tuple[int, str, str]] = []  # (pending, model_key, lang)
+    for model in reg.enabled_candidate_models():
+        for lang in reg.eval.languages:
+            if not model.covers_lang(lang):
+                continue
+            pending, fully_cached = feedback_batch_state(
+                cache, results, model, lang, version
+            )
+            if pending == 0:
+                continue
+            if not fully_cached:
+                log_line(log, f"judge {model.key}/{lang}: {pending} pending but "
+                              "not fully cached — locked (one-call rule)")
+                continue
+            batches.append((pending, model.key, lang))
+
+    if not batches:
+        log_line(log, "no judge batches unlocked; done")
+        return 0
+
+    batches.sort()  # smallest first: the first batch doubles as the quota probe
+    for pending, model_key, lang in batches:
+        log_line(log, f"judge {model_key}/{lang} starting ({pending} pending)")
+        mark = log.stat().st_size
+        rc = run_logged(RUN_EVAL + ["--phase", "judge",
+                                    "--models", model_key, "--langs", lang], log)
+        with log.open("r", encoding="utf-8", errors="replace") as f:
+            f.seek(mark)
+            batch_out = f.read()
+        if GEMINI_QUOTA_RE.search(batch_out):
+            log_line(log, "GEMINI-429-STOP: quota 429 seen in judge output; "
+                          "stopping all judging until reviewed (stop-rule)")
+            return 3
+        log_line(log, f"judge {model_key}/{lang} done rc={rc}")
+
+    log_line(log, "all unlocked judge batches done")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

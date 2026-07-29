@@ -216,6 +216,32 @@ leakage around `matplotlib`/`nio` (overrides exist in pyproject), and the
     end-of-day TPD 429s burn a few bounded retries and items go PENDING
     into tomorrow's pass (minutes of churn) — while the protection cost
     ~2 calendar days. PENDING-is-cheap changes the tradeoff.
+39. (Live integration, 2026-07-29) gpt-oss-20b: reduced-coverage KEEP,
+    en+de only (ModelConfig.langs). Groq's TPD meter charges ACTUAL tokens,
+    not requested (verified 2026-07-27: trailing-24h requested sums over
+    admitted calls exceeded the limits — impossible under requested
+    charging; Used tracked actual sums within ~13%). Reasoning burn scales
+    with item difficulty (~463 actual/GEC item en -> ~3,200 de; projected
+    ~3,400 cs / ~4,300 es), so full coverage ≈ 4.5M tokens ≈ ~22 days of
+    output-ceiling artifacts. en+de finishes inside 70B's tail; coverage
+    reduction disclosed as a named REPORT.md section; cross-model
+    comparisons involving gpt-oss are en/de-only.
+40. (Live integration, 2026-07-29) Per-task max_output_tokens overrides
+    (ModelConfig.max_output_tokens_per_task; output_budget()). gpt-oss GEC
+    gets 8192: 14 of its 15 de GEC format failures were 4096-ceiling
+    artifacts (finish_reason=length) — OUR budget fault, not model
+    findings — deleted and regenerated under the new budget. Overrides
+    re-key only that task's uncached calls; NEVER override feedback after
+    generation starts (cached gens would be orphaned).
+41. (Live integration, 2026-07-29) Crash-hardening after a live pass died
+    silently for 31h on sqlite3 "database is locked" (cache.put, apparent
+    sleep/wake; asyncio.gather propagated one loop's exception and killed
+    all three): sqlite connects get timeout=30 (cache + results); each
+    candidate model loop is exception-isolated (a crashed loop parks its
+    model, siblings continue; regression-tested); retryable-HTTP error
+    bodies keep 2000 chars so quota 429 bodies retain their metric name
+    (the Gemini TPD stop-rule is unenforceable otherwise). Prerequisite
+    for unattended scheduling (Part 3).
 
 ## C. Live-integration checklist, in order
 

@@ -70,7 +70,11 @@ class RawCache:
     def _conn(self) -> sqlite3.Connection:
         conn = getattr(self._local, "conn", None)
         if conn is None:
-            conn = sqlite3.connect(self.path)
+            # timeout=30: writer threads (one per model loop via to_thread)
+            # can collide on the write lock, e.g. during a WAL checkpoint or
+            # right after a sleep/wake; the 5s default crashed a live pass
+            # (2026-07-27, "database is locked"). # DECISION 41
+            conn = sqlite3.connect(self.path, timeout=30)
             conn.execute("PRAGMA journal_mode=WAL")
             self._local.conn = conn
         return conn

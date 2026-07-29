@@ -33,3 +33,7 @@ reports/*.png
 # Bot runtime state
 bot/store/
 bot/*.log
+
+# Unattended daily-pass logs (Part 3 automation): full run_eval output,
+# can quote provider error bodies. Local diagnostics only.
+logs/

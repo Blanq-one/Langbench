@@ -278,6 +278,24 @@ def render_markdown(reports: list[ModelReport], results: ResultsDB) -> str:
     lines += ["", "## Recommendation", ""] + _recommendation_lines(reports)
     lines += [
         "",
+        "## Coverage note: gpt-oss-20b runs English+German only (DECISION 39)",
+        "",
+        "gpt-oss-20b's it/cs/es rows are absent BY DESIGN, not missing data.",
+        "Its hidden-reasoning token burn scales with item difficulty: measured",
+        "actual tokens per GEC item rose from ~463 (English) to ~3,200",
+        "(German), projecting to ~3,400 (Czech) and ~4,300 (Spanish) — meeting",
+        "or exceeding any sane output budget. Groq's free-tier tokens-per-day",
+        "meter charges ACTUAL tokens consumed (verified against 429 quota",
+        "bodies), so full five-language coverage would have cost ~3 extra",
+        "calendar weeks and produced output-ceiling artifacts at scale instead",
+        "of measurements. This is the reasoning-models-scale-with-difficulty",
+        "finding made concrete: reasoning token draw, not request count, sets",
+        "free-tier feasibility (see also the qwen3.6-27b section below).",
+        "Cross-model comparisons involving gpt-oss-20b are valid on en/de",
+        "only; its other per-language cells above read n/a.",
+    ]
+    lines += [
+        "",
         "## Feasibility finding: qwen3.6-27b (evaluated, dropped — DECISION 37)",
         "",
         "Qwen 3.6 27B was enrolled as the fourth candidate and dropped after",

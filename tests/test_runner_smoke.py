@@ -147,3 +147,49 @@ class _RoutingAdapter:
         if model.model_id == "broken":
             return await self.broken.chat(model, req)
         return await self.good.chat(model, req)
+
+
+class _CrashingAdapter(_RoutingAdapter):
+    """'broken' raises an unexpected non-provider exception (the class that
+    killed a live pass via gather propagation, DECISION 41)."""
+
+    async def chat(self, model, req):  # type: ignore[no-untyped-def]
+        if model.model_id == "broken":
+            raise RuntimeError("database is locked (simulated infra fault)")
+        return await self.good.chat(model, req)
+
+
+async def test_one_crashed_model_loop_does_not_kill_siblings(workspace: Path) -> None:
+    """DECISION 41 regression: a model loop dying on an UNEXPECTED exception
+    (not ProviderError, not DailyQuotaExhausted) parks that model only; the
+    sibling loop must still finish every item."""
+    async with httpx.AsyncClient() as client:
+        runner, results = build_runner(workspace, client)
+        runner._adapters["fakeprov"] = _CrashingAdapter()  # type: ignore[assignment]
+        models = runner.reg.enabled_candidate_models()
+        plan = runner.load_work(["en"])
+
+        await runner.run_candidates(plan, models)  # must not raise
+
+        assert len(results.fetch(task="gec", model_key="fakeprov/good")) == N
+        assert len(results.fetch(task="cefr", model_key="fakeprov/good")) == N
+        assert len(results.fetch(task="gec", model_key="fakeprov/broken")) == 0
+
+
+async def test_model_langs_restriction_skips_uncovered_languages(workspace: Path) -> None:
+    """DECISION 39 regression: a model with langs set runs nothing outside
+    them, and the estimator counts nothing for the uncovered language."""
+    async with httpx.AsyncClient() as client:
+        runner, results = build_runner(workspace, client)
+        runner._adapters["fakeprov"] = _RoutingAdapter()  # type: ignore[assignment]
+        models = runner.reg.enabled_candidate_models()
+        broken = runner.reg.model("fakeprov/broken")
+        broken.langs = ["de"]  # fixture data is en-only
+        plan = runner.load_work(["en"])
+
+        estimate = runner.estimate(plan, models)
+        assert "fakeprov/broken: 0 calls pending" in estimate
+
+        await runner.run_candidates(plan, models)
+        assert len(results.fetch(model_key="fakeprov/broken")) == 0
+        assert len(results.fetch(task="gec", model_key="fakeprov/good")) == N

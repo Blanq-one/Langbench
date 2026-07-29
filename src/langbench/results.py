@@ -110,7 +110,9 @@ class ResultsDB:
     def _conn(self) -> sqlite3.Connection:
         conn = getattr(self._local, "conn", None)
         if conn is None:
-            conn = sqlite3.connect(self.path)
+            # timeout=30: same crash class as the raw cache — concurrent
+            # writer threads must wait out a busy lock, not die. # DECISION 41
+            conn = sqlite3.connect(self.path, timeout=30)
             conn.row_factory = sqlite3.Row
             self._local.conn = conn
         return conn

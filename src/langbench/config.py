@@ -76,11 +76,27 @@ class ModelConfig(BaseModel):
     rate_limit: RateLimit
     pricing: Pricing
     max_output_tokens: int = 1024
+    # Per-task overrides of max_output_tokens, e.g. {gec: 8192}. max_tokens is
+    # part of the cache key, so adding an override re-keys only that task's
+    # UNCACHED calls; completed items resume from the results DB regardless.
+    # NEVER override "feedback" after generation has started: cached feedback
+    # gens would become unreachable and the judge would re-pay them. # DECISION 40
+    max_output_tokens_per_task: dict[str, int] = Field(default_factory=dict)
+    # None = model runs every eval.yaml language. A list restricts the model
+    # to those languages in the candidates AND judge phases and in the
+    # estimator (reduced-coverage keep, DECISION 39: gpt-oss-20b en+de only).
+    langs: list[str] | None = None
     # Provider-specific request-body params merged verbatim into the wire
     # request by OpenAI-compatible adapters (e.g. Groq reasoning_format).
     # Part of the cache key: changing it must invalidate cached responses.
     extra_body: dict[str, Any] = Field(default_factory=dict)
     notes: str = ""
+
+    def output_budget(self, task: str) -> int:
+        return self.max_output_tokens_per_task.get(task, self.max_output_tokens)
+
+    def covers_lang(self, lang: str) -> bool:
+        return self.langs is None or lang in self.langs
 
     @field_validator("key")
     @classmethod

@@ -108,7 +108,11 @@ class ProviderAdapter(ABC):
                 continue
             latency_ms = (time.monotonic() - start) * 1000.0
             if resp.status_code in RETRYABLE_STATUS:
-                last_err = ProviderError(f"HTTP {resp.status_code}: {resp.text[:300]}")
+                # 2000 chars, not 300: quota 429 bodies name their limit
+                # metric near the END (Gemini's "Quota exceeded for metric:
+                # ..."), and the TPD stop-rule is unenforceable when the
+                # metric name is truncated away. # DECISION 41
+                last_err = ProviderError(f"HTTP {resp.status_code}: {resp.text[:2000]}")
                 retry_after = _parse_retry_after(resp)
                 await self._backoff(attempt, retry_after, reason=f"HTTP {resp.status_code}")
                 continue

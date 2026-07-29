@@ -172,6 +172,8 @@ class Runner:
         for m in models:
             pending = 0
             for tw in plan.items:
+                if not m.covers_lang(tw.lang):
+                    continue
                 v = self.reg.eval.prompt_versions[tw.task]
                 pending += sum(
                     not self.results.has(tw.task, tw.lang, m.key, v, s.id)
@@ -188,6 +190,8 @@ class Runner:
             if tw.task != "feedback":
                 continue
             for m in models:
+                if not m.covers_lang(tw.lang):
+                    continue
                 judge_pending += sum(
                     not self.results.has("feedback", tw.lang, m.key, v, s.id)
                     for s in tw.samples
@@ -264,10 +268,26 @@ class Runner:
 
     async def run_candidates(self, plan: WorkPlan, models: list[ModelConfig]) -> None:
         self._register_limits(models)
-        await asyncio.gather(*(self._model_loop(m, plan) for m in models))
+        await asyncio.gather(*(self._model_loop_guarded(m, plan) for m in models))
+
+    async def _model_loop_guarded(self, model: ModelConfig, plan: WorkPlan) -> None:
+        # One loop's unexpected exception (e.g. a transient sqlite lock on a
+        # sleep/wake) must not kill the sibling loops via gather propagation:
+        # the failed model's items stay PENDING for the next resume while the
+        # others keep spending their independent quotas. # DECISION 41
+        try:
+            await self._model_loop(model, plan)
+        except Exception:
+            log.exception(
+                "%s: model loop aborted by unexpected error; sibling loops "
+                "continue, this model's items stay pending for the next resume",
+                model.key,
+            )
 
     async def _model_loop(self, model: ModelConfig, plan: WorkPlan) -> None:
         for tw in plan.items:
+            if not model.covers_lang(tw.lang):
+                continue
             version = self.reg.eval.prompt_versions[tw.task]
             for sample in tw.samples:
                 if self.results.has(tw.task, tw.lang, model.key, version, sample.id):
@@ -288,7 +308,7 @@ class Runner:
     ) -> None:
         if tw.task == "gec":
             req = gec_task.build_request(
-                sample.source_text, version, tw.lang, model.max_output_tokens
+                sample.source_text, version, tw.lang, model.output_budget("gec")
             )
             parsed, resp = await self._call_parsed(model, req, version, gec_task.Output)
             if parsed is None:
@@ -308,7 +328,7 @@ class Runner:
                 ok = True
         elif tw.task == "cefr":
             req = cefr_task.build_request(
-                sample.source_text, version, tw.lang, model.max_output_tokens
+                sample.source_text, version, tw.lang, model.output_budget("cefr")
             )
             parsed, resp = await self._call_parsed(model, req, version, cefr_task.Output)
             gran = sample.cefr_granularity or "six_level"
@@ -335,7 +355,7 @@ class Runner:
             # Generation only; judging happens in run_judge. Record nothing in
             # the results DB here — the raw cache holds the output.
             req = feedback_task.build_request(
-                sample.source_text, version, tw.lang, model.max_output_tokens
+                sample.source_text, version, tw.lang, model.output_budget("feedback")
             )
             await self._call_parsed(model, req, version, feedback_task.Output)
             return
@@ -359,6 +379,8 @@ class Runner:
             if tw.task != "feedback":
                 continue
             for model in models:
+                if not model.covers_lang(tw.lang):
+                    continue
                 for sample in tw.samples:
                     if self.results.has("feedback", tw.lang, model.key, version, sample.id):
                         continue
@@ -383,7 +405,7 @@ class Runner:
     ) -> None:
         # Re-obtain the candidate's feedback (cache hit if candidates phase ran).
         cand_req = feedback_task.build_request(
-            sample.source_text, version, tw.lang, model.max_output_tokens
+            sample.source_text, version, tw.lang, model.output_budget("feedback")
         )
         cand_parsed, cand_resp = await self._call_parsed(
             model, cand_req, version, feedback_task.Output
@@ -456,7 +478,7 @@ class Runner:
         items: list[dict[str, Any]] = []
         for sample in samples:
             cand_req = feedback_task.build_request(
-                sample.source_text, version, lang, model.max_output_tokens
+                sample.source_text, version, lang, model.output_budget("feedback")
             )
             cand_parsed, _ = await self._call_parsed(
                 model, cand_req, version, feedback_task.Output
