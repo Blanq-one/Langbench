@@ -242,6 +242,23 @@ leakage around `matplotlib`/`nio` (overrides exist in pyproject), and the
     bodies keep 2000 chars so quota 429 bodies retain their metric name
     (the Gemini TPD stop-rule is unenforceable otherwise). Prerequisite
     for unattended scheduling (Part 3).
+42. (Live integration, 2026-07-29) AMENDS DECISION 40: gpt-oss GEC budget
+    8192 -> 7000. Groq admission-rejects any request exceeding the MODEL's
+    own TPM (HTTP 413 "Request too large for model ... on tokens per
+    minute (TPM): Limit 8000, Requested 8418" — per-model, the body names
+    the model; caps: 8B 6K, 70B 12K, gpt-oss 8K), so 8192 + prompt was
+    never admissible: 96 rejections churned as permanent pendings that no
+    retry or resume could clear. Fixes: (a) budgets re-keyed only for
+    uncached pending items; (b) load-time validation — per (model, task),
+    max_prompt_estimate + output budget must fit request_token_cap, both
+    now recorded per model in models.yaml with measurement provenance
+    (gpt-oss worst prompt 660 over 600 cached calls incl. repairs);
+    (c) 413 confirmed non-retryable BY DESIGN (absent from
+    RETRYABLE_STATUS — a config error burns one attempt, not five);
+    (d) reclassification: finish_reason=length at the max ADMISSIBLE
+    budget is a genuine finding (the model's reasoning fits no budget this
+    tier admits), scored as a format failure and explained in REPORT.md —
+    unlike the sub-cap 4096 length failures, which were OUR artifact.
 
 ## C. Live-integration checklist, in order
 

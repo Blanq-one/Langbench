@@ -7,7 +7,13 @@ from pathlib import Path
 
 import pytest
 
-from langbench.config import load_registry
+from langbench.config import (
+    ModelConfig,
+    Pricing,
+    RateLimit,
+    load_registry,
+    validate_request_caps,
+)
 
 
 class TestShippedConfigs:
@@ -103,3 +109,45 @@ class TestValidation:
         _write(tmp_path, "eval.yaml", bad_eval)
         with pytest.raises(ValueError, match="feedback"):
             load_registry(tmp_path)
+
+
+class TestRequestCapValidation:
+    """DECISION 42: budgets that a provider admission-rejects (HTTP 413,
+    prompt estimate + max_tokens over the per-request cap) must fail at
+    config load, not churn as permanent pendings at run time."""
+
+    def _model(self, **overrides: object) -> ModelConfig:
+        base: dict[str, object] = dict(
+            key="p1/m", provider="p1", model_id="m", display_name="M",
+            enabled=True, rate_limit=RateLimit(rpm=1, rpd=1),
+            pricing=Pricing(input_per_mtok=0, output_per_mtok=0),
+        )
+        base.update(overrides)
+        return ModelConfig(**base)  # type: ignore[arg-type]
+
+    def test_budget_over_cap_fails_loudly(self) -> None:
+        m = self._model(
+            max_output_tokens=4096,
+            max_output_tokens_per_task={"gec": 8192},  # the live 2026-07-29 bug
+            request_token_cap=8000,
+            max_prompt_estimate=800,
+        )
+        with pytest.raises(ValueError, match="HTTP 413"):
+            validate_request_caps([m])
+
+    def test_admissible_budgets_pass(self) -> None:
+        m = self._model(
+            max_output_tokens=4096,
+            max_output_tokens_per_task={"gec": 7000},
+            request_token_cap=8000,
+            max_prompt_estimate=800,
+        )
+        validate_request_caps([m])  # must not raise
+
+    def test_cap_without_prompt_estimate_rejected(self) -> None:
+        m = self._model(request_token_cap=8000)
+        with pytest.raises(ValueError, match="max_prompt_estimate"):
+            validate_request_caps([m])
+
+    def test_no_cap_means_no_check(self) -> None:
+        validate_request_caps([self._model(max_output_tokens=999999)])

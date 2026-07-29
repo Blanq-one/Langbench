@@ -34,6 +34,11 @@ models:
     rate_limit: { rpm: 10, rpd: 800 }
     pricing: { input_per_mtok: 0.05, output_per_mtok: 0.08 }
     max_output_tokens: 1024
+    # DECISION 42: cap = this model's TPM (6K, console-confirmed 2026-07-24).
+    # max_prompt_estimate: 2029 max observed primary prompt (es feedback)
+    # + up to ~1024 of raw output re-embedded in a repair turn, rounded up.
+    request_token_cap: 6000
+    max_prompt_estimate: 3200
 
   - key: groq/llama-3.3-70b-versatile
     provider: groq
@@ -50,6 +55,11 @@ models:
     rate_limit: { rpm: 17, rpd: 200 }
     pricing: { input_per_mtok: 0.59, output_per_mtok: 0.79 }
     max_output_tokens: 1024
+    # DECISION 42: cap = this model's TPM (12K, console-confirmed 2026-07-24).
+    # max_prompt_estimate mirrors the 8B row (same prompt corpus + repair
+    # mechanics, same tokenizer family).
+    request_token_cap: 12000
+    max_prompt_estimate: 3200
 
   # gemma2-9b-it was retired from Groq (absent from the live /models listing
   # and the pricing page, 2026-07-24). Replaced by qwen3.6-27b below.
@@ -113,12 +123,28 @@ models:
     # failure mode); en+de finishes inside 70B's ~7-day tail. Disclosed as a
     # named coverage note in REPORT.md.
     langs: [en, de]
-    # DECISION 40 (2026-07-29): GEC budget 8192 — 14 of 15 de GEC format
+    # DECISION 40 (2026-07-29): raised GEC budget — 14 of 15 de GEC format
     # failures were 4096-ceiling artifacts (finish_reason=length), OUR fault,
     # deleted and regenerated under this budget. feedback stays 4096: its
     # gens are cached and max_tokens is in the cache key, so changing it
     # would orphan them.
-    max_output_tokens_per_task: { gec: 8192 }
+    # DECISION 42 (2026-07-29) AMENDS the 8192 above to 7000: Groq admission-
+    # rejects any request over the model's own TPM (HTTP 413, "Request too
+    # large for model ... on tokens per minute (TPM): Limit 8000, Requested
+    # 8418") — 8192 + prompt could never be admitted; 96 such rejections
+    # churned as permanent pendings on 2026-07-29. 7000 is the max admissible
+    # GEC budget under the 8000 cap given max_prompt_estimate 800. A response
+    # that still exhausts 7000 (finish_reason=length) is a GENUINE finding
+    # (reasoning cannot fit any admissible budget on this tier) and stays a
+    # scored format failure.
+    max_output_tokens_per_task: { gec: 7000 }
+    # Cap = this model's TPM per the 413 bodies (per-MODEL, not org-global:
+    # the body names the model). max_prompt_estimate provenance: 660 max
+    # observed over all 600 cached gpt-oss calls incl. repair turns (hidden
+    # reasoning keeps repair prompts small — only visible text is re-embedded),
+    # rounded up.
+    request_token_cap: 8000
+    max_prompt_estimate: 800
 
   # ---- OpenRouter free-tier candidates (only used if OPENROUTER_API_KEY set) ----
   - key: openrouter/llama-3.1-8b-free

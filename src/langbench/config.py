@@ -86,6 +86,16 @@ class ModelConfig(BaseModel):
     # to those languages in the candidates AND judge phases and in the
     # estimator (reduced-coverage keep, DECISION 39: gpt-oss-20b en+de only).
     langs: list[str] | None = None
+    # Provider per-REQUEST admission cap (prompt estimate + max_tokens). On
+    # Groq this is the model's own TPM: a single request may not exceed it
+    # ("Request too large for model X ... on tokens per minute (TPM):
+    # Limit 8000" — HTTP 413, rejected before processing). None = no cap
+    # known. Validated at load against max_prompt_estimate. # DECISION 42
+    request_token_cap: int | None = None
+    # Recorded worst-case prompt-token estimate for this model's eval
+    # requests, repair turns included (provenance belongs in models.yaml).
+    # Only used by the load-time cap validation.
+    max_prompt_estimate: int = 0
     # Provider-specific request-body params merged verbatim into the wire
     # request by OpenAI-compatible adapters (e.g. Groq reasoning_format).
     # Part of the cache key: changing it must invalidate cached responses.
@@ -163,6 +173,33 @@ class Registry(BaseModel):
         raise KeyError(f"model key {key!r} not in registry")
 
 
+def validate_request_caps(models: list[ModelConfig]) -> None:
+    """Fail loudly at load when any (model, task) output budget cannot be
+    admitted: provider caps reject the request with HTTP 413 BEFORE
+    processing, so every affected item churns as a permanent pending that
+    no retry or resume can ever clear. # DECISION 42"""
+    for m in models:
+        if m.request_token_cap is None:
+            continue
+        if m.max_prompt_estimate <= 0:
+            raise ValueError(
+                f"models.yaml: {m.key} sets request_token_cap but no "
+                "max_prompt_estimate; record the measured worst-case prompt "
+                "size (see the row's provenance comment)"
+            )
+        for task in ("gec", "cefr", "feedback"):
+            need = m.max_prompt_estimate + m.output_budget(task)
+            if need > m.request_token_cap:
+                raise ValueError(
+                    f"models.yaml: {m.key} task {task!r}: max_prompt_estimate "
+                    f"({m.max_prompt_estimate}) + output budget "
+                    f"({m.output_budget(task)}) = {need} exceeds "
+                    f"request_token_cap ({m.request_token_cap}); the provider "
+                    "admission-rejects every such call with HTTP 413 — lower "
+                    "the task budget"
+                )
+
+
 def _load_yaml(path: Path) -> dict[str, object]:
     with path.open("r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
@@ -203,6 +240,7 @@ def load_registry(config_dir: Path | None = None) -> Registry:
         if m.key in keys_seen:
             raise ValueError(f"models.yaml: duplicate model key {m.key!r}")
         keys_seen.add(m.key)
+    validate_request_caps(models)
 
     reg = Registry(providers=providers, models=models, eval=eval_cfg)
     judge = reg.judge_model()

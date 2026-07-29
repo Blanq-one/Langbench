@@ -34,6 +34,10 @@ MAX_ATTEMPTS = 5
 BASE_BACKOFF_S = 2.0
 MAX_BACKOFF_S = 60.0
 
+# 413 (request exceeds the model's per-request TPM admission cap) is
+# deliberately ABSENT: it is a configuration error that no retry can fix —
+# it fails on the first attempt and the item stays pending. The load-time
+# request-cap validation in config.py prevents it from arising. # DECISION 42
 RETRYABLE_STATUS = {408, 409, 429, 500, 502, 503, 504}
 
 

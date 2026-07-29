@@ -293,6 +293,14 @@ def render_markdown(reports: list[ModelReport], results: ResultsDB) -> str:
         "free-tier feasibility (see also the qwen3.6-27b section below).",
         "Cross-model comparisons involving gpt-oss-20b are valid on en/de",
         "only; its other per-language cells above read n/a.",
+        "",
+        "A second cap binds on this tier: Groq admission-rejects any single",
+        "request above the model's per-request token cap (8,000 for",
+        "gpt-oss-20b), so the largest admissible GEC output budget is 7,000.",
+        "gpt-oss-20b responses that still exhaust that budget",
+        "(finish_reason=length) are scored as format failures deliberately:",
+        "the model's reasoning cannot fit ANY budget this tier will admit,",
+        "which is a property of the model on this tier, not of our harness.",
     ]
     lines += [
         "",
