@@ -259,6 +259,20 @@ leakage around `matplotlib`/`nio` (overrides exist in pyproject), and the
     budget is a genuine finding (the model's reasoning fits no budget this
     tier admits), scored as a format failure and explained in REPORT.md —
     unlike the sub-cap 4096 length failures, which were OUR artifact.
+43. (Live integration, 2026-07-29) daily_pass runs the JUDGE stage before
+    candidates, and the concurrent-pass guard is scoped to the candidates
+    stage only. TPD-bound candidate passes grind all day without exiting,
+    which starved the judge stage entirely (observed: ~101 fully-cached
+    judgeable items and a full Gemini 500-RPD day unused while the
+    candidates subprocess never returned); judge-first also fires the
+    Gemini quota probe at schedule time sharp, and the judge stage makes
+    zero live candidate calls (one-call rule) so it safely overlaps a
+    live pass — Gemini spend has no contention with Groq candidates.
+    Operational lesson recorded the hard way: scheduled tasks are verified
+    by a TEST FIRE (schtasks /Run + confirm the log), never by successful
+    registration alone — the first registration stored an unquoted
+    spaces-in-path command, failed every fire with 0x80070002
+    (FILE_NOT_FOUND), and sat "Ready" looking healthy.
 
 ## C. Live-integration checklist, in order
 

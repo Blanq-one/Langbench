@@ -4,23 +4,34 @@
 Designed to run from Windows Task Scheduler via scripts/daily_pass.cmd.
 Everything it does is what the manual daily resume did, mechanized:
 
-1. GUARD: if a run_eval.py process is already alive, exit — never run two
-   candidate passes at once (they double-hammer the shared rate buckets).
-2. CANDIDATES: run scripts/run_eval.py (resume semantics built in; crashed
-   or parked models leave PENDING items for tomorrow, DECISIONs 17/41).
-3. JUDGE, one batch per (model, lang), smallest pending first: a batch is
-   eligible only when EVERY pending feedback item has its candidate primary
-   call cached AND, if the primary is unparseable, its repair turn cached —
-   the one-call rule: the judge phase must never trigger a live candidate
-   generation. Smallest-first makes the first batch a cheap probe of the
-   judge quota.
-4. GEMINI STOP-RULE: if a batch log shows a Gemini quota 429, stop all
+1. JUDGE FIRST (DECISION 43), one batch per (model, lang), smallest pending
+   first: a batch is eligible only when EVERY pending feedback item has its
+   candidate primary call cached AND, if the primary is unparseable, its
+   repair turn cached — the one-call rule: the judge phase must never
+   trigger a live candidate generation. Smallest-first makes the first
+   batch a cheap probe of the judge quota, fired at schedule time sharp.
+   Judge runs BEFORE candidates because TPD-bound candidate passes grind
+   all day without exiting, which starved the judge stage entirely
+   (observed 2026-07-29: ~101 judgeable items + a full Gemini day unused);
+   the judge's Gemini spend has zero contention with Groq candidates.
+   Batches are computed from the cache as of NOW — gens produced by
+   today's candidates run get judged tomorrow.
+2. GEMINI STOP-RULE: if a batch log shows a Gemini quota 429, stop all
    further judging immediately and leave a GEMINI-429-STOP marker in the
    log for the human/Claude review (do not grind retries across batches).
+   Candidates still run after a judge stop — Groq quota is independent.
+3. GUARD, scoped to candidates only: if a run_eval.py process is already
+   alive (e.g. yesterday's TPD-ground pass), skip the CANDIDATES stage —
+   never run two candidate passes at once (they double-hammer the shared
+   rate buckets). The judge stage is NOT guarded: it makes zero live
+   candidate calls (one-call rule) and safely overlaps a live pass.
+4. CANDIDATES: run scripts/run_eval.py (resume semantics built in; crashed
+   or parked models leave PENDING items for tomorrow, DECISIONs 17/41).
 
 Logs: logs/automation/YYYY-MM-DD.log (repo-relative, gitignored).
-Exit code 0 = ran to plan (including "nothing to do"); 1 = guard skip;
-2 = candidates subprocess failed; 3 = stopped on the Gemini stop-rule.
+Exit code 0 = ran to plan (including "nothing to do"); 1 = candidates
+skipped by the guard (judge stage still ran); 2 = candidates subprocess
+failed; 3 = judging stopped on the Gemini stop-rule (candidates still ran).
 """
 
 from __future__ import annotations
@@ -122,22 +133,9 @@ def feedback_batch_state(
     return pending, fully_cached
 
 
-def main() -> int:
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    log = LOG_DIR / f"{dt.date.today():%Y-%m-%d}.log"
-
-    if another_pass_alive():
-        log_line(log, "GUARD: run_eval.py already alive; skipping this fire")
-        return 1
-
-    log_line(log, "candidates pass starting")
-    rc = run_logged(RUN_EVAL, log)
-    if rc != 0:
-        log_line(log, f"candidates pass FAILED rc={rc} — judging skipped, "
-                      "items stay pending; review the log")
-        return 2
-    log_line(log, "candidates pass done")
-
+def run_judge_stage(log: Path) -> bool:
+    """Judge every fully-cached batch, smallest first. Returns False when the
+    Gemini stop-rule fired (further judging halted for the day)."""
     reg = load_registry()
     cache = RawCache()
     results = ResultsDB()
@@ -159,8 +157,8 @@ def main() -> int:
             batches.append((pending, model.key, lang))
 
     if not batches:
-        log_line(log, "no judge batches unlocked; done")
-        return 0
+        log_line(log, "no judge batches unlocked")
+        return True
 
     batches.sort()  # smallest first: the first batch doubles as the quota probe
     for pending, model_key, lang in batches:
@@ -174,11 +172,35 @@ def main() -> int:
         if GEMINI_QUOTA_RE.search(batch_out):
             log_line(log, "GEMINI-429-STOP: quota 429 seen in judge output; "
                           "stopping all judging until reviewed (stop-rule)")
-            return 3
+            return False
         log_line(log, f"judge {model_key}/{lang} done rc={rc}")
 
     log_line(log, "all unlocked judge batches done")
-    return 0
+    return True
+
+
+def main() -> int:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    log = LOG_DIR / f"{dt.date.today():%Y-%m-%d}.log"
+
+    # Judge FIRST (DECISION 43): fires the Gemini probe at schedule time and
+    # cannot be starved by a TPD-ground candidates run that never exits. Not
+    # guarded — it overlaps a live candidates pass safely (one-call rule).
+    judge_ok = run_judge_stage(log)
+
+    if another_pass_alive():
+        log_line(log, "GUARD: run_eval.py already alive; skipping candidates "
+                      "stage this fire")
+        return 1
+
+    log_line(log, "candidates pass starting")
+    rc = run_logged(RUN_EVAL, log)
+    if rc != 0:
+        log_line(log, f"candidates pass FAILED rc={rc} — items stay pending; "
+                      "review the log")
+        return 2
+    log_line(log, "candidates pass done")
+    return 0 if judge_ok else 3
 
 
 if __name__ == "__main__":
