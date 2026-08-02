@@ -34,11 +34,21 @@ models:
     rate_limit: { rpm: 10, rpd: 800 }
     pricing: { input_per_mtok: 0.05, output_per_mtok: 0.08 }
     max_output_tokens: 1024
+    # DECISION 46 (2026-08-02): feedback 1024 -> 1900, the max admissible
+    # under the 6K cap WITH repair re-embedding (repair prompt = 2029-token
+    # worst primary + up to B tokens of raw output + wrapper; request =
+    # prompt + B, so 2029 + 2B + slack <= 6000 => B <= ~1950). 4096 (the
+    # 70B/gpt-oss value) does not fit this tier. Truncation@1024 was a
+    # harness artifact (106 of 8B's 112 feedback format failures had
+    # finish_reason=length in the scored chain); those rows were deleted
+    # and regenerate under this budget. Residual length@1900 is a genuine
+    # finding per DECISION 42d.
+    max_output_tokens_per_task: { feedback: 1900 }
     # DECISION 42: cap = this model's TPM (6K, console-confirmed 2026-07-24).
     # max_prompt_estimate: 2029 max observed primary prompt (es feedback)
-    # + up to ~1024 of raw output re-embedded in a repair turn, rounded up.
+    # + up to 1900 of raw output re-embedded in a repair turn, rounded up.
     request_token_cap: 6000
-    max_prompt_estimate: 3200
+    max_prompt_estimate: 4000
 
   - key: groq/llama-3.3-70b-versatile
     provider: groq
@@ -55,11 +65,18 @@ models:
     rate_limit: { rpm: 17, rpd: 200 }
     pricing: { input_per_mtok: 0.59, output_per_mtok: 0.79 }
     max_output_tokens: 1024
+    # DECISION 46 (2026-08-02): feedback 1024 -> 4096 (parity with gpt-oss/
+    # qwen). 20 of its 28 de feedback format failures were length@1024 in
+    # the scored chain — OUR budget artifact, deleted and regenerated under
+    # this budget. Clears the 12K cap trivially: worst repair prompt
+    # (2029 + 4096 + wrapper ~ 6300) + 4096 = 10396.
+    max_output_tokens_per_task: { feedback: 4096 }
     # DECISION 42: cap = this model's TPM (12K, console-confirmed 2026-07-24).
-    # max_prompt_estimate mirrors the 8B row (same prompt corpus + repair
-    # mechanics, same tokenizer family).
+    # max_prompt_estimate: 2029-token worst primary + up to 4096 of raw
+    # output re-embedded in a repair turn, rounded up (was 3200 at the 1024
+    # feedback budget).
     request_token_cap: 12000
-    max_prompt_estimate: 3200
+    max_prompt_estimate: 6300
 
   # gemma2-9b-it was retired from Groq (absent from the live /models listing
   # and the pricing page, 2026-07-24). Replaced by qwen3.6-27b below.
@@ -202,7 +219,12 @@ models:
     model_id: gemini-3.5-flash-lite         # VERIFIED 2026-07-24 via discover_models.py
     display_name: Gemini 3.5 Flash-Lite (judge)
     enabled: auto
-    rate_limit: { rpm: 15, rpd: 500 }
+    # DECISION 45 (2026-08-02): rpm derated 15 -> 13. Pacing at exactly the
+    # server's 15-RPM free-tier burst window raced it (observed 2026-08-01:
+    # quotaId GenerateRequestsPerMinutePerProjectPerModel-FreeTier 429s at
+    # batch start; one judge item burned all 5 retries on a self-healing
+    # per-minute limit). 13 leaves headroom; rpd 500 is the real budget.
+    rate_limit: { rpm: 13, rpd: 500 }
     pricing: { input_per_mtok: 0.30, output_per_mtok: 2.50 }
     max_output_tokens: 1024
     notes: judge only, never a candidate

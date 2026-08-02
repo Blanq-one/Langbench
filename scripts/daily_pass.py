@@ -16,9 +16,13 @@ Everything it does is what the manual daily resume did, mechanized:
    the judge's Gemini spend has zero contention with Groq candidates.
    Batches are computed from the cache as of NOW — gens produced by
    today's candidates run get judged tomorrow.
-2. GEMINI STOP-RULE: if a batch log shows a Gemini quota 429, stop all
-   further judging immediately and leave a GEMINI-429-STOP marker in the
-   log for the human/Claude review (do not grind retries across batches).
+2. GEMINI STOP-RULE (narrowed, DECISION 45): trips ONLY on daily-quota
+   exhaustion — a 429 body whose quotaId contains "PerDay" (e.g.
+   GenerateRequestsPerDayPerProjectPerModel). Burst per-MINUTE 429s
+   (quotaId ...PerMinute..., observed 2026-08-01) self-heal in seconds and
+   are ordinary retryable backoff; stopping on them would serialize
+   end-game judge batches to one per day. On a trip: stop all further
+   judging, leave a GEMINI-429-STOP marker in the log for review.
    Candidates still run after a judge stop — Groq quota is independent.
 3. GUARD, scoped to candidates only: if a run_eval.py process is already
    alive (e.g. yesterday's TPD-ground pass), skip the CANDIDATES stage —
@@ -66,8 +70,11 @@ LOG_DIR = REPO / "logs" / "automation"
 # This script already runs inside the uv-managed venv (daily_pass.cmd enters
 # it via `python -m uv run`), so children reuse the same interpreter.
 RUN_EVAL = [sys.executable, "scripts/run_eval.py"]
-GEMINI_QUOTA_RE = re.compile(r"gemini.*HTTP 429|HTTP 429.*(quota|RATE_LIMIT|PerDay)",
-                             re.IGNORECASE)
+# Daily-quota exhaustion ONLY (DECISION 45). The quotaId value follows
+# "quotaId" after JSON punctuation that the log may render escaped
+# (\"quotaId\": \"GenerateRequestsPerDay...\"); [^A-Za-z]+ spans it either
+# way. PerMinute burst 429s must NOT match — they are retryable noise.
+GEMINI_DAILY_QUOTA_RE = re.compile(r"quotaId[^A-Za-z]+\w*PerDay", re.IGNORECASE)
 
 
 def log_line(log: Path, msg: str) -> None:
@@ -174,9 +181,10 @@ def run_judge_stage(log: Path) -> bool:
         with log.open("r", encoding="utf-8", errors="replace") as f:
             f.seek(mark)
             batch_out = f.read()
-        if GEMINI_QUOTA_RE.search(batch_out):
-            log_line(log, "GEMINI-429-STOP: quota 429 seen in judge output; "
-                          "stopping all judging until reviewed (stop-rule)")
+        if GEMINI_DAILY_QUOTA_RE.search(batch_out):
+            log_line(log, "GEMINI-429-STOP: DAILY quota 429 seen in judge "
+                          "output; stopping all judging until reviewed "
+                          "(stop-rule, PerDay quotaId only)")
             return False
         log_line(log, f"judge {model_key}/{lang} done rc={rc}")
 

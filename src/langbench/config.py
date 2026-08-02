@@ -79,8 +79,10 @@ class ModelConfig(BaseModel):
     # Per-task overrides of max_output_tokens, e.g. {gec: 8192}. max_tokens is
     # part of the cache key, so adding an override re-keys only that task's
     # UNCACHED calls; completed items resume from the results DB regardless.
-    # NEVER override "feedback" after generation has started: cached feedback
-    # gens would become unreachable and the judge would re-pay them. # DECISION 40
+    # Overriding "feedback" mid-run orphans cached-but-unjudged gens (the
+    # judge re-pays them) — acceptable ONLY when that orphaned set is exactly
+    # the set being intentionally regenerated (DECISION 46 amending 40; the
+    # 2026-08-02 truncation-artifact purge is the precedent).
     max_output_tokens_per_task: dict[str, int] = Field(default_factory=dict)
     # None = model runs every eval.yaml language. A list restricts the model
     # to those languages in the candidates AND judge phases and in the

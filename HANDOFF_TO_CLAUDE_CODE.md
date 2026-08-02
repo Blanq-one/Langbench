@@ -273,6 +273,51 @@ leakage around `matplotlib`/`nio` (overrides exist in pyproject), and the
     registration alone — the first registration stored an unquoted
     spaces-in-path command, failed every fire with 0x80070002
     (FILE_NOT_FOUND), and sat "Ready" looking healthy.
+44. (Live integration, 2026-08-02) Scheduled-task triggers replaced. The
+    Daily-09:00-only registration NEVER fired autonomously in three days:
+    07-30 missed entirely (no log), the 07-31/08-01 passes were manual, and
+    the task's one real attempt (08-01 13:49) died 0xC000013A before
+    logging — the machine is asleep or on battery at 09:00 and the task had
+    StartWhenAvailable OFF + DisallowStartIfOnBatteries ON. Now: ONLOGON
+    (this user, 2-minute delay) + daily 21:00 backstop, StartWhenAvailable
+    ON, battery restrictions OFF (a pass is minutes of API calls). Action
+    command unchanged (quoted path). Verified by schtasks /Run test fire
+    per the DECISION 43 lesson; trigger-level proof is the first real
+    logon / 21:00 fire.
+45. (Live integration, 2026-08-02) Gemini judge stop-rule NARROWED to
+    daily-quota exhaustion only (GEMINI_DAILY_QUOTA_RE: quotaId containing
+    "PerDay"). The 2026-08-01 GEMINI-429-STOP trip was quotaId
+    GenerateRequestsPerMinutePerProjectPerModel-FreeTier — a 15-RPM burst
+    limit that self-heals in seconds; treating it as a stop cost nothing
+    that day (no other batch was unlocked) but would serialize end-game
+    judge batches to one per day. Per-minute 429s are ordinary retryable
+    backoff. Additionally judge rpm derated 15 -> 13: client pacing at
+    exactly the server's burst window raced it and burned one item's five
+    retries on a self-healing limit.
+46. (Live integration, 2026-08-02) AMENDS DECISION 40 — feedback budgets
+    MAY be overridden mid-run when the orphaned cached-unjudged set is
+    exactly the set being intentionally regenerated. llama feedback
+    truncation@1024 reclassified as harness artifact per the DECISION
+    35/40/42 taxonomy (truncation at OUR budget = artifact; exhausting the
+    max ADMISSIBLE budget = genuine finding). finish_reason audit over
+    every judged llama feedback row: 126 of 138 format failures had
+    finish_reason=length in the scored call chain (8B: cs 38/40, de 17/18,
+    es 41/41, it 10/10, en 0/1; 70B: de 20/28, en 0/3); ZERO gec/cefr
+    failures at ceiling; 14 parsed-with-length-in-chain rows KEPT
+    (balanced-brace closure = complete scored object). The 126 rows were
+    deleted from results.sqlite for regeneration + re-judge. New budgets:
+    70B feedback 4096 (worst repair 6300 + 4096 = 10396 <= 12K cap); 8B
+    feedback 1900 — 4096 does NOT fit its 6K tier because a repair turn
+    re-embeds the full primary prompt (2029 worst) PLUS up to B tokens of
+    raw output at the same max_tokens (2029 + 2B + slack <= 6000 =>
+    B <= ~1950; same admission math as DECISION 42's 8192 -> 7000).
+    max_prompt_estimate re-derived: 8B 4000, 70B 6300. Residual
+    finish_reason=length at the new budgets is a genuine 42d finding.
+    Cost accepted (user ruling): ~1 quota-day of 70B regen, report slips
+    ~1 day. Headline consequence: llama-8B's feedback language gradient
+    (en 98 -> es 18) was mostly OUR truncation artifact, not model
+    behavior; llama-8B is no longer candidates-complete until the 126
+    regenerate.
 
 ## C. Live-integration checklist, in order
 
